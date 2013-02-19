@@ -1,0 +1,6 @@
+Makefile.PL
+MANIFEST
+README
+t/Music-Scala.t
+lib/Music/Scala.pm
+LICENSE
