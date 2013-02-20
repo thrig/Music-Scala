@@ -128,8 +128,6 @@ sub read_scala {
       . scalar(@notes)
       . " notes";
   }
-
-  unshift @notes, '1/1';    # "degree 0 of 1/1 is implicit"
   $self->{_scala}->{notes} = \@notes;
 
   return $self;
@@ -150,7 +148,7 @@ Music::Scala - Scala scale support for Perl
   $scala->read_scala( file => 'bossart-muri.scl' );
 
   $scala->get_description;  # "Victor Ferdinand Bossart's..."
-  $scala->get_notes;        # ['1/1', 80.4499, 195.11250, ...]
+  $scala->get_notes;        # [80.4499, 195.11250, ...]
 
 =head1 DESCRIPTION
 
@@ -179,13 +177,13 @@ scala definition into the object.
 
 =item B<get_notes>
 
-Returns the notes of the scala data (as an array reference), but throws
-an exception if B<read_scala> has not yet parsed a scala definition into
-the object. The notes may be either real numbers (values in cents,
-possibly even negative, noted by a C<.> somewhere in them) or otherwise
-integer ratios (e.g. C<3/2>) that denote ratios.
-
-The first element is for unison, hence the ratio of C<1/1>.
+Returns the notes (or rather "interval outcomes" for how that interval
+and starting frequency must create the new frequency of that new note)
+of the scala data (as an array reference), but throws an exception if
+B<read_scala> has not yet parsed a scala definition into the object. The
+notes may be either real numbers (values in cents, possibly even
+negative, noted by a C<.> somewhere in them) or otherwise integer ratios
+(e.g. C<3/2>) that denote ratios.
 
 =item B<new> I<optional_params>, ...
 
