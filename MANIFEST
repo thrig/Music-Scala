@@ -1,6 +1,9 @@
-Makefile.PL
-MANIFEST
-README
-t/Music-Scala.t
-lib/Music/Scala.pm
 LICENSE
+MANIFEST
+Makefile.PL
+README
+groenewald_bach.scl
+lib/Music/Scala.pm
+t/Music-Scala.t
+t/pod.t
+valid-pitch-lines.scl
