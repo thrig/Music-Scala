@@ -205,6 +205,11 @@ Music::Scala - Scala scale support for Perl
   $scala->get_description;  # "Victor Ferdinand Bossart's..."
   $scala->get_notes;        # [80.4499, 195.11250, ...]
 
+  $scala->set_description('Heavenly Chimes');
+  $scala->set_notes([qw{ 32/29 1/2 16/29 }]);
+
+  $scala->write_scala( file => 'chimes.scl' );
+
 =head1 DESCRIPTION
 
 Scala scale (C<*.scl> file) support for Perl. The L</"SEE ALSO">
@@ -311,6 +316,9 @@ Scales, tunings, and temperament would be good music theory topics to
 read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
 (among many other more in-depth treatments stemming from the more than
 one centuries of development behind these topics).
+
+L<http://github.com/thrig/Music-Scala> for the perhaps more current
+version of the code, or to report bugs, etc.
 
 =head1 AUTHOR
 
