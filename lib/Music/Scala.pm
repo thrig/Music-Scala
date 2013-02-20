@@ -232,18 +232,20 @@ a good one to start with.
 =item B<get_description>
 
 Returns the description (a string, possibly the empty one) of the scala
-data, but throws an exception if B<read_scala> has not yet parsed a
-scala definition into the object.
+data, but throws an exception if this field has not been set by some
+previous method call.
 
 =item B<get_notes>
 
-Returns the notes (or rather "interval outcomes" for how that interval
-and starting frequency must create the new frequency of that new note)
-of the scala data (as an array reference), but throws an exception if
-B<read_scala> has not yet parsed a scala definition into the object. The
-notes may be either real numbers (values in cents, possibly even
-negative, noted by a C<.> somewhere in them) or otherwise integer ratios
-(e.g. C<3/2>) that denote ratios.
+Returns, as an array reference, the "notes" of the scala, but throws an
+exception if this field has not been set by some previous method. The
+notes are either real numbers (representing values in cents, or 1/1200
+of an octave (these may be negative)) or otherwise integer ratios (e.g.
+C<3/2> or C<2>).
+
+The implicit C<1/1> for unison is not contained in the array reference
+of notes; the first element is for the 2nd degree of the scale (e.g. the
+minor second of a 12-tone scale).
 
 =item B<new> I<optional_params>, ...
 
@@ -263,7 +265,9 @@ linefeeds, a reasonable default would be:
 
 Output encoding may also need to be set, if in particular the
 I<description> field of the scala definition will be printed or saved
-elsewhere. See L<perluniintro> for details.
+elsewhere. See L<perluniintro> for details. Note that both B<read_scala>
+and B<write_scala> will use this same global I<binmode> value if no
+I<binmode> is passed to those methods.
 
 =item *
 
@@ -281,7 +285,7 @@ is wrong with the input. Use the C<get_*> methods to obtain the scala
 data thus parsed.
 
 Comments in the input file are ignored, so anything subsequently written
-using B<write_scala> would lack those.
+using B<write_scala> will lack those.
 
 Returns the Music::Scala object, so can be chained with other calls.
 
@@ -302,6 +306,10 @@ Writes a scala I<file> (or instead to the I<fh> filehandle), perhaps
 also with a I<binmode> specification (as for other methods, above). Will
 throw some kind of exception if anything at all is wrong, such as not
 having scala data loaded in the object.
+
+Data will likely not be written until a I<fh> passed is closed. If this
+seems surprising, see L<http://perl.plover.com/FAQs/Buffering.html> to
+learn why it is not.
 
 Returns the Music::Scala object, so can be chained with other calls.
 
