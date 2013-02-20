@@ -214,7 +214,7 @@ data. Sanity check high water mark in the event bad input is passed.
 
 =back
 
-=item B<read_scala> I<file => 'filename'> | I<fh => $fh>
+=item B<read_scala> I<file =E<gt> 'filename'> | I<fh =E<gt> $fh>
 
 Parses a scala I<file> (or instead filehandle via the I<fh> option),
 perhaps also with a I<binmode> specification (same as documented under
