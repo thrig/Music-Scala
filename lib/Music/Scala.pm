@@ -147,14 +147,14 @@ Music::Scala - Scala scale support for Perl
   use Music::Scala;
   my $scala = Music::Scala->new;
 
-  $scala->read_scala( file => ' bossart-muri . scl ' );
+  $scala->read_scala( file => 'bossart-muri.scl' );
 
   $scala->get_description;  # "Victor Ferdinand Bossart's..."
-  $scala->get_notes;        # [" 1 / 1 ", 80.4499, 195.11250, ...]
+  $scala->get_notes;        # ['1/1', 80.4499, 195.11250, ...]
 
 =head1 DESCRIPTION
 
-Scala scale (C<*.scl> file) support for Perl. The L</" SEE ALSO ">
+Scala scale (C<*.scl> file) support for Perl. The L</"SEE ALSO">
 section links to the developer pages for the specification, along with
 an archive of scala files for various tunings and temperaments.
 
