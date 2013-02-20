@@ -136,7 +136,9 @@ sub read_scala {
 
 sub set_description {
   my ( $self, $desc ) = @_;
-  croak 'description must be string value' if defined reftype $desc;
+  croak 'description must be string value'
+    if !defined $desc
+    or defined reftype $desc;
   $self->{_scala}->{description} = $desc;
   return $self;
 }
@@ -144,7 +146,13 @@ sub set_description {
 sub set_notes {
   my ( $self, $notes ) = @_;
   croak 'notes must be array ref' if !defined $notes or ref $notes ne 'ARRAY';
-  $self->{_scala}->{notes} = [@$notes];
+  $self->{_scala}->{notes} = [];
+  for my $n (@$notes) {
+    if ( $n !~ m{^(?:-?[0-9]+\.(?:[0-9]+)?|[0-9]+(?:/[0-9]+)?)$} ) {
+      croak 'notes must be integer ratios or real numbers';
+    }
+    push @{ $self->{_scala}->{notes} }, $n;
+  }
   return $self;
 }
 
