@@ -10,8 +10,9 @@ use strict;
 use warnings;
 
 use Carp qw/croak/;
+use Scalar::Util qw/reftype/;
 
-our $VERSION = '0.10';
+our $VERSION = '0.20';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -35,7 +36,7 @@ sub new {
 
 sub get_description {
   my ($self) = @_;
-  croak 'no scala file loaded' if !exists $self->{_scala}->{description};
+  croak 'no scala loaded' if !exists $self->{_scala}->{description};
   return $self->{_scala}->{description} // '';
 }
 
@@ -44,7 +45,7 @@ sub get_description {
 # returns as array in scalar context.
 sub get_notes {
   my ($self) = @_;
-  croak 'no scala file loaded' if !exists $self->{_scala}->{notes};
+  croak 'no scala loaded' if !exists $self->{_scala}->{notes};
   return $self->{_scala}->{notes};
 }
 
@@ -129,6 +130,52 @@ sub read_scala {
       . " notes";
   }
   $self->{_scala}->{notes} = \@notes;
+
+  return $self;
+}
+
+sub set_description {
+  my ( $self, $desc ) = @_;
+  croak 'description must be string value' if defined reftype $desc;
+  $self->{_scala}->{description} = $desc;
+  return $self;
+}
+
+sub set_notes {
+  my ( $self, $notes ) = @_;
+  croak 'notes must be array ref' if !defined $notes or ref $notes ne 'ARRAY';
+  $self->{_scala}->{notes} = [@$notes];
+  return $self;
+}
+
+sub write_scala {
+  my ( $self, %param ) = @_;
+
+  croak 'no scala loaded' if !exists $self->{_scala}->{notes};
+
+  my $fh;
+  if ( exists $param{file} ) {
+    open( $fh, '>', $param{file} ) or croak 'open failed: ' . $!;
+  } elsif ( exists $param{fh} ) {
+    $fh = $param{fh};
+  } else {
+    croak 'must specify file or fh parameter to write_scala';
+  }
+  if ( exists $param{binmode} ) {
+    binmode $fh, $param{binmode} or croak 'binmode failed: ' . $!;
+  } elsif ( exists $self->{_binmode} ) {
+    binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
+  }
+
+  say $fh ( exists $self->{_scala}->{description}
+      and defined $self->{_scala}->{description} )
+    ? $self->{_scala}->{description}
+    : '';
+  say $fh ' ', scalar @{ $self->{_scala}->{notes} };
+  say $fh '!';    # conventional comment between note count and notes
+  for my $note ( @{ $self->{_scala}->{notes} } ) {
+    say $fh ' ', $note;
+  }
 
   return $self;
 }
@@ -219,6 +266,29 @@ perhaps also with a I<binmode> specification (same as documented under
 the B<new> method). Will throw some kind of exception if anything at all
 is wrong with the input. Use the C<get_*> methods to obtain the scala
 data thus parsed.
+
+Comments in the input file are ignored, so anything subsequently written
+using B<write_scala> would lack those.
+
+Returns the Music::Scala object, so can be chained with other calls.
+
+=item B<set_description> I<description>
+
+Sets the description. Should be a string. Returns the Music::Scala
+object, so can be chained with other calls.
+
+=item B<set_notes> I<array_ref>
+
+Sets the notes. Should be an array reference, ideally containing values
+in ratios or cents as per the Scala scale file specification. Returns
+the Music::Scala object, so can be chained with other calls.
+
+=item B<write_scala> I<file =E<gt> 'filename'> | I<fh =E<gt> $fh>
+
+Writes a scala I<file> (or instead to the I<fh> filehandle), perhaps
+also with a I<binmode> specification (as for other methods, above). Will
+throw some kind of exception if anything at all is wrong, such as not
+having scala data loaded in the object.
 
 Returns the Music::Scala object, so can be chained with other calls.
 

@@ -64,5 +64,21 @@ is(
   "J\x{fc}rgen Gr\x{f6}newald, simplified Bach temperament, Ars Organi vol.57 no.1, March 2009, p.39\r",
   'Latin 1 infested II'
 );
+# but crlf handling should not affect the note parsing...
+$deeply->(
+  $scala->get_notes,
+  [ qw{256/243 189.25008 32/27 386.60605 4/3 1024/729 693.17509 128/81 887.27506 16/9 1086.80812 2/1}
+  ],
+  'Bach temperament'
+);
 
-plan tests => 12;
+isa_ok( $scala->set_description('test'), 'Music::Scala' );
+isa_ok( $scala->set_notes( [qw{256/243 9/8}] ), 'Music::Scala' );
+
+my $output = '';
+open my $ofh, '>', \$output or die 'could not open in-memory fh ' . $!;
+isa_ok( $scala->write_scala( fh => $ofh ), 'Music::Scala' );
+close $ofh;
+is( $output, "test\n 2\n!\n 256/243\n 9/8\n", 'output to fh' );
+
+plan tests => 17;
