@@ -55,7 +55,7 @@ $deeply->(
 # These were copied & pasted from scala site, plus blank desc and number
 # of subsequent notes to create a minimally valid file.
 $scala->read_scala( file => 'valid-pitch-lines.scl' );
-is( $scala->get_description, '', 'blank desc' );
+is( $scala->get_description, 'this is a test', 'desc' );
 $deeply->(
   [ $scala->get_notes ],
   [qw{81/64 408.0 408. 5/1 -5.0 10/20 100.0 100.0 5/4}],
@@ -109,4 +109,12 @@ $deeply->(
   'frequency conversion'
 );
 
-plan tests => 23;
+# file => via new() to save on then typing read_scala out
+$scala = Music::Scala->new( file => 'valid-pitch-lines.scl' );
+is( $scala->get_description, 'this is a test', 'desc' );
+
+is($scala->get_binmode, undef, 'default binmode');
+isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala');
+is($scala->get_binmode, ':crlf', 'custom binmode');
+
+plan tests => 27;

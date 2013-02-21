@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -21,6 +21,11 @@ my $MAX_LINES = 3000;
 ########################################################################
 #
 # SUBROUTINES
+
+sub get_binmode {
+  my ($self) = @_;
+  return $self->{_binmode};
+}
 
 sub get_concertpitch {
   my ($self) = @_;
@@ -111,6 +116,13 @@ sub new {
   $self->{_ratios} = undef;
 
   bless $self, $class;
+
+  if ( exists $param{file} ) {
+    $self->read_scala( file => $param{file} );
+  } elsif ( exists $param{fh} ) {
+    $self->read_scala( fh => $param{fh} );
+  }
+
   return $self;
 }
 
@@ -207,6 +219,12 @@ sub read_scala {
   $self->{_notes}  = \@notes;
   $self->{_ratios} = undef;
 
+  return $self;
+}
+
+sub set_binmode {
+  my ($self, $binmode) = @_;
+  $self->{_binmode} = $binmode;
   return $self;
 }
 
@@ -325,6 +343,10 @@ to bad input. B<new> would be a good one to start with.
 
 =over 4
 
+=item B<get_binmode>
+
+Returns the current C<binmode> layer setting, C<undef> by default.
+
 =item B<get_concertpitch>
 
 Returns the concert pitch presently set in the object. 440 (Hz) is
@@ -401,6 +423,15 @@ using the B<interval2freq> method. By default this is 440Hz.
 
 =item *
 
+I<file> - filename, if specified, that will be passed to B<read_scala>.
+
+=item *
+
+I<fh> - file handle, if specified, that will be passed to B<read_scala>,
+but only if I<file> is not specified.
+
+=item *
+
 I<MAX_LINES> - sets the maximum number of lines to read while parsing
 data. Sanity check high water mark in the event bad input is passed.
 
@@ -423,6 +454,13 @@ I<binmode> as in the B<new> method:
   $scala->read_scala( fh   => $input_fh );
 
 Returns the Music::Scala object, so can be chained with other calls.
+
+=item B<set_binmode> I<binmode_layer>
+
+Sets the default C<binmode> layer used in B<read_scala> and
+B<write_scala> methods (unless a custom I<binmode> argument is passed to
+those calls). Returns the Music::Scala object, so can be chained with
+other calls.
 
 =item B<set_concertpitch> I<frequency>
 
