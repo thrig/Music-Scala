@@ -42,12 +42,13 @@ $deeply->(
   'Bach temperament'
 );
 
-# TODO figure out how to use cents properly
 $deeply->(
   [ map { my $s = sprintf "%.2f", $_; $s }
-      $scala->interval2freq( 0, 12, 24, -12, -24, 1 )
+      $scala->interval2freq( 0, 12, 24, -12, -24, 1, 2, 3 )
   ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 440, 880, 1760, 220, 110, 463.54, ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 440,
+    880, 1760, 220, 110, 463.54, 490.83, 521.48
+  ],
   'frequency conversion'
 );
 
@@ -93,4 +94,19 @@ is( $output, "test\n 2\n!\n 256/243\n 9/8\n", 'output to fh' );
 isa_ok( $scala->set_concertpitch(123.4), 'Music::Scala' );
 is( $scala->get_concertpitch, 123.4, 'custom concert pitch' );
 
-plan tests => 21;
+# more cents testing - via slendro_ky2.scl
+$scala = Music::Scala->new( concertpitch => 295 );
+is( $scala->get_concertpitch, 295, 'check cp via new' );
+
+# NOTE Perl will map things like a bare 1200.000 to '1200' which then
+# becomes the ratio 1200/1 which is wrong.
+$scala->set_notes( 250.868, 483.311, 715.595, 951.130, '1200.000' );
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s }
+      $scala->interval2freq( 0, 5, 10, -5, -10 )
+  ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 295, 590, 1180, 147.5, 73.75 ],
+  'frequency conversion'
+);
+
+plan tests => 23;

@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.30';
+our $VERSION = '0.31';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -51,7 +51,10 @@ sub interval2freq {
       if ( $n =~ m{(\d+)/(\d+)} ) {
         push @ratios, $1 / $2;    # ratio, as marked with /
       } else {
-        push @ratios, "TODO";
+        # Inverse cent (cent to ratio) equation. Lifted from
+        # "Musimathics, volume 1", p.46. Magic number is
+        # (1200/log10(2))
+        push @ratios, 10**( $n / 3986.31371386484 );
       }
     }
     $self->{_ratios} = \@ratios;
@@ -59,7 +62,7 @@ sub interval2freq {
 
   my @freqs;
   for my $i ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
-    if ( $i == 0 ) {              # special case for unison (ratio 1/1)
+    if ( $i == 0 ) {    # special case for unison (ratio 1/1)
       push @freqs, $self->{_concertpitch};
     } else {
       my $is_dsc = $i < 0 ? 1 : 0;
@@ -99,7 +102,7 @@ sub new {
       if !defined $param{concertpitch}
       or !looks_like_number $param{concertpitch}
       or $param{concertpitch} < 0;
-    $self->{_concertpitch} = $self->{_concertpitch};
+    $self->{_concertpitch} = $param{concertpitch};
   }
 
   $self->{_MAX_LINES} =
@@ -305,15 +308,15 @@ Music::Scala - Scala scale support for Perl
   $scala->set_notes(qw{ 32/29 1/2 16/29 });
   $scala->write_scala('chimes.scl');
 
+  # or cents, note the quoting on .0 value
+  $scala->set_notes(250.9, 483.3, 715.6, 951.1, '1200.0');
+
 =head1 DESCRIPTION
 
 Scala scale support for Perl: reading, writing, setting, and interval to
 frequency conversion methods are provided. The L</"SEE ALSO"> section
 links to the developer pages for the specification, along with an
 archive of scala files that define various tunings and temperaments.
-
-Warning! This is a new module. Features or handling in particular of
-cents versus ratios may change as I figure out the code.
 
 =head1 METHODS
 
@@ -417,6 +420,15 @@ containing values in ratios or cents as per the Scala scale file
 specification, and the method will throw an exception if these ideals
 are not met. Returns the Music::Scala object, so can be chained with
 other calls.
+
+NOTE cents with no value past the decimal must be quoted in code, as
+otherwise Perl converts the value to C<1200> which the code then turns
+into the integer ratio C<1200/1> instead of what should be C<2/1>.
+B<read_scala> does not suffer this problem, as it is looking for the
+literal dot (that nothing is removing automatically) and that is a
+different code path than what happens for ratios.
+
+  $scala->set_notes(250.9, 483.3, 715.6, 951.1, '1200.0');
 
 =item B<write_scala> I<filename>
 
