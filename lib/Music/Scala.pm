@@ -10,9 +10,9 @@ use strict;
 use warnings;
 
 use Carp qw/croak/;
-use Scalar::Util qw/reftype/;
+use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.20';
+our $VERSION = '0.30';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -22,21 +22,13 @@ my $MAX_LINES = 3000;
 #
 # SUBROUTINES
 
-sub new {
-  my ( $class, %param ) = @_;
-  my $self = {};
-
-  $self->{_binmode} = $param{binmode} if exists $param{binmode};
-  $self->{_MAX_LINES} =
-    exists $param{MAX_LINES} ? $param{MAX_LINES} : $MAX_LINES;
-
-  bless $self, $class;
-  return $self;
+sub get_concertpitch {
+  my ($self) = @_;
+  return $self->{_concertpitch} // 440;
 }
 
 sub get_description {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_description};
   return $self->{_description} // '';
 }
 
@@ -47,6 +39,76 @@ sub get_notes {
   my ($self) = @_;
   croak 'no scala loaded' if !exists $self->{_notes};
   return @{ $self->{_notes} };
+}
+
+sub interval2freq {
+  my $self = shift;
+  croak 'no scala loaded' if !exists $self->{_notes};
+
+  if ( !defined $self->{_ratios} ) {
+    my @ratios;
+    for my $n ( @{ $self->{_notes} } ) {
+      if ( $n =~ m{(\d+)/(\d+)} ) {
+        push @ratios, $1 / $2;    # ratio, as marked with /
+      } else {
+        push @ratios, "TODO";
+      }
+    }
+    $self->{_ratios} = \@ratios;
+  }
+
+  my @freqs;
+  for my $i ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
+    if ( $i == 0 ) {              # special case for unison (ratio 1/1)
+      push @freqs, $self->{_concertpitch};
+    } else {
+      my $is_dsc = $i < 0 ? 1 : 0;
+
+      # "Octave" portion (might be zero) - how many times the interval
+      # passes through the complete scale
+      my $octave_count  = abs int $i / @{ $self->{_ratios} };
+      my $octave_offset = $self->{_ratios}->[-1] * $octave_count;
+      $octave_offset = 1 / $octave_offset if $is_dsc and $octave_offset != 0;
+
+      my $remainder = 0;
+      my $offset    = $i % @{ $self->{_ratios} };
+      if ( $offset != 0 ) {
+        # non-octave portion of remainder, if any
+        $offset--;
+        $remainder = $self->{_ratios}->[$offset];
+        $remainder = 1 / $remainder if $is_dsc and $remainder != 0;
+      }
+
+      push @freqs, $octave_offset * $self->{_concertpitch} +
+        $remainder * $self->{_concertpitch};
+    }
+  }
+
+  return @freqs > 1 ? @freqs : $freqs[0];
+}
+
+sub new {
+  my ( $class, %param ) = @_;
+  my $self = {};
+
+  $self->{_binmode} = $param{binmode} if exists $param{binmode};
+
+  $self->{_concertpitch} = 440;
+  if ( exists $param{concertpitch} ) {
+    croak 'concert pitch must be a positive number (Hz)'
+      if !defined $param{concertpitch}
+      or !looks_like_number $param{concertpitch}
+      or $param{concertpitch} < 0;
+    $self->{_concertpitch} = $self->{_concertpitch};
+  }
+
+  $self->{_MAX_LINES} =
+    exists $param{MAX_LINES} ? $param{MAX_LINES} : $MAX_LINES;
+
+  $self->{_ratios} = undef;
+
+  bless $self, $class;
+  return $self;
 }
 
 sub read_scala {
@@ -112,14 +174,14 @@ sub read_scala {
     # illegal for ratios. All the ratios are plain numbers (no period),
     # or if they have a slash, it is followed by another number (so no
     # "42/" cases). Checked via various greps on the file contents.
-    if ( $line =~ m/^\s*(-?[0-9]+\.[0-9]*)/ ) {
+    if ( $line =~ m/^\s* ( -?[0-9]+\. [0-9]* ) /x ) {
       push @notes, $1;    # cents
-    } elsif ( $line =~ m{^\s*-[0-9]+} ) {
+    } elsif ( $line =~ m{^\s* -[0-9] }x ) {
       # specification says these "should give a read error"
       croak 'invalid negative ratio in note list';
-    } elsif ( $line =~ m{^\s*([0-9]+(?:/[0-9]+)?)} ) {
+    } elsif ( $line =~ m{^\s* ( [1-9][0-9]* (?:/[0-9]+)? ) }x ) {
       my $ratio = $1;
-      $ratio .= '/1' if $ratio !~ m{/};
+      $ratio .= '/1' if $ratio !~ m{/};    # implicit qualify of ratios
       push @notes, $ratio;
     } else {
       # Nothing in the spec about non-matching lines, so blow up.
@@ -139,8 +201,19 @@ sub read_scala {
       . scalar(@notes)
       . " notes";
   }
-  $self->{_notes} = \@notes;
+  $self->{_notes}  = \@notes;
+  $self->{_ratios} = undef;
 
+  return $self;
+}
+
+sub set_concertpitch {
+  my ( $self, $cp ) = @_;
+  croak 'concert pitch must be a positive number (Hz)'
+    if !defined $cp
+    or !looks_like_number $cp
+    or $cp < 0;
+  $self->{_concertpitch} = $cp;
   return $self;
 }
 
@@ -157,12 +230,18 @@ sub set_notes {
   my $self = shift;
   my @notes;
   for my $n ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
-    if ( $n !~ m{^(?:-?[0-9]+\.(?:[0-9]+)?|[0-9]+(?:/[0-9]+)?)$} ) {
+    if ( $n =~ m{^ -?[0-9]+\. (?:[0-9]+)? $}x ) {
+      push @notes, $n;
+    } elsif ( $n =~ m{^ [1-9][0-9]* (?:/[0-9]+)? $}x ) {
+      my $ratio = $n;
+      $ratio .= '/1' if $ratio !~ m{/};    # implicit qualify of ratios
+      push @notes, $ratio;
+    } else {
       croak 'notes must be integer ratios or real numbers';
     }
-    push @notes, $n;
   }
-  $self->{_notes} = \@notes;
+  $self->{_notes}  = \@notes;
+  $self->{_ratios} = undef;
   return $self;
 }
 
@@ -215,9 +294,12 @@ Music::Scala - Scala scale support for Perl
   use Music::Scala ();
   my $scala = Music::Scala->new;
 
-  $scala->read_scala('bossart-muri.scl');
-  $scala->get_description;  # "Victor Ferdinand Bossart's..."
-  $scala->get_notes;        # (80.4499, 195.11250, ...)
+  $scala->read_scala('groenewald_bach.scl');
+  $scala->get_description; # "Jurgen Gronewald, si..."
+  $scala->get_notes;       # (256/243, 189.25008, ...)
+
+  $scala->set_concertpitch(422.5);
+  $scala->interval2freq(0, 1); # (422.5, 445.1)
 
   $scala->set_description('Heavenly Chimes');
   $scala->set_notes(qw{ 32/29 1/2 16/29 });
@@ -225,15 +307,13 @@ Music::Scala - Scala scale support for Perl
 
 =head1 DESCRIPTION
 
-Scala scale (C<*.scl> file) support for Perl. The L</"SEE ALSO">
-section links to the developer pages for the specification, along with
-an archive of scala files for various tunings and temperaments.
+Scala scale support for Perl: reading, writing, setting, and interval to
+frequency conversion methods are provided. The L</"SEE ALSO"> section
+links to the developer pages for the specification, along with an
+archive of scala files that define various tunings and temperaments.
 
 Warning! This is a new module. Features or handling in particular of
-cents versus ratios may change as I figure out the code. Additional
-methods will likely be added to assist with the task of calculating
-frequencies given particular notes or pitches or whatnot, but for now
-there is reasonable C<*.scl> parsing support.
+cents versus ratios may change as I figure out the code.
 
 =head1 METHODS
 
@@ -242,11 +322,15 @@ to bad input. B<new> would be a good one to start with.
 
 =over 4
 
+=item B<get_concertpitch>
+
+Returns the concert pitch presently set in the object. 440 (Hz) is
+the default.
+
 =item B<get_description>
 
-Returns the description (a string, possibly the empty one) of the scala
-data, but throws an exception if this field has not been set by some
-previous method call.
+Returns the description of the scala data. This will be the empty string
+if no description was read or set prior.
 
 =item B<get_notes>
 
@@ -260,9 +344,9 @@ C<3/2> or C<2>).
   my @notes = $scala->get_notes;
   if (@notes == 12) { ...
 
-The implicit C<1/1> for unison is not contained in the array reference
-of notes; the first element is for the 2nd degree of the scale (e.g. the
-minor second of a 12-tone scale).
+The implicit C<1/1> for unison is not contained in the list of notes;
+the first element is for the 2nd degree of the scale (e.g. the minor
+second of a 12-tone scale).
 
 =item B<new> I<optional_params>, ...
 
@@ -288,6 +372,11 @@ I<binmode> is passed to those methods.
 
 =item *
 
+I<concertpitch> - sets the reference value (in Hertz) for conversions
+using the B<interval2freq> method. By default this is 440Hz.
+
+=item *
+
 I<MAX_LINES> - sets the maximum number of lines to read while parsing
 data. Sanity check high water mark in the event bad input is passed.
 
@@ -298,7 +387,9 @@ data. Sanity check high water mark in the event bad input is passed.
 Parses a scala file. Will throw some kind of exception if anything at
 all is wrong with the input. Use the C<get_*> methods to obtain the
 scala data thus parsed. Comments in the input file are ignored, so
-anything subsequently written using B<write_scala> will lack those.
+anything subsequently written using B<write_scala> will lack those. All
+ratios are made implicit by this method; that is, a C<2> would be
+qualified as C<2/1>.
 
 As an alternative, accepts also I<file> or I<fh> hash keys, along with
 I<binmode> as in the B<new> method:
@@ -308,6 +399,11 @@ I<binmode> as in the B<new> method:
   $scala->read_scala( fh   => $input_fh );
 
 Returns the Music::Scala object, so can be chained with other calls.
+
+=item B<set_concertpitch> I<frequency>
+
+Sets the concert pitch to the specified positive value. Will throw an
+exception if the input does not look like a positive number.
 
 =item B<set_description> I<description>
 

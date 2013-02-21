@@ -14,8 +14,8 @@ BEGIN { use_ok('Music::Scala') }
 my $scala = Music::Scala->new;
 isa_ok( $scala, 'Music::Scala' );
 
-dies_ok( sub { $scala->get_description },
-  'get_description before read_scala' );
+is( $scala->get_concertpitch, 440, 'default concert pitch' );
+is( $scala->get_description,  '',  'default description' );
 dies_ok( sub { $scala->get_notes }, 'get_notes before read_scala' );
 
 dies_ok( sub { $scala->read_scala( file => 'Makefile.PL' ) },
@@ -40,6 +40,15 @@ $deeply->(
   [ qw{256/243 189.25008 32/27 386.60605 4/3 1024/729 693.17509 128/81 887.27506 16/9 1086.80812 2/1}
   ],
   'Bach temperament'
+);
+
+# TODO figure out how to use cents properly
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s }
+      $scala->interval2freq( 0, 12, 24, -12, -24, 1 )
+  ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 440, 880, 1760, 220, 110, 463.54, ],
+  'frequency conversion'
 );
 
 # These were copied & pasted from scala site, plus blank desc and number
@@ -81,4 +90,7 @@ isa_ok( $scala->write_scala( fh => $ofh ), 'Music::Scala' );
 close $ofh;
 is( $output, "test\n 2\n!\n 256/243\n 9/8\n", 'output to fh' );
 
-plan tests => 17;
+isa_ok( $scala->set_concertpitch(123.4), 'Music::Scala' );
+is( $scala->get_concertpitch, 123.4, 'custom concert pitch' );
+
+plan tests => 21;
