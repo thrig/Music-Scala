@@ -351,6 +351,27 @@ The implicit C<1/1> for unison is not contained in the list of notes;
 the first element is for the 2nd degree of the scale (e.g. the minor
 second of a 12-tone scale).
 
+=item B<interval2freq> I<intervals ...>
+
+Converts a list of passed interval numbers (list or single array
+reference) to frequencies (in Hz) that are returned as a list. Interval
+numbers are integers, C<0> for unison, C<1> for the first interval
+(which would be a minor 2nd for a 12-note scale, but something different
+for scales of other sizes), and so on up to an octave or moral
+equivalent thereof, depending on the scale. Negative intervals take the
+frequency in the other direction, e.g. C<-1> for what in a 12-note
+system would be a minor 2nd downwards.
+
+Conversions are based on the I<concertpitch> setting, which is 440Hz by
+default. Use B<set_concertpitch> to adjust this, for example to base the
+conversion around the frequency of MIDI pitch 60:
+
+  $scala->set_concertpitch(261.63);
+
+Some scala files note what this value should be in the comments or
+description, or it may vary based on the specific software or
+instruments involved.
+
 =item B<new> I<optional_params>, ...
 
 Constructor. Returns object. Accepts various optional parameters.
