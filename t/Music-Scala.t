@@ -113,8 +113,18 @@ $deeply->(
 $scala = Music::Scala->new( file => 'valid-pitch-lines.scl' );
 is( $scala->get_description, 'this is a test', 'desc' );
 
-is($scala->get_binmode, undef, 'default binmode');
-isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala');
-is($scala->get_binmode, ':crlf', 'custom binmode');
+is( $scala->get_binmode, undef, 'default binmode' );
+isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala' );
+is( $scala->get_binmode, ':crlf', 'custom binmode' );
 
-plan tests => 27;
+$scala->set_notes( '2/1', '1200.0', '5/4' );
+$deeply->(
+  [ $scala->notes2ratios( $scala->get_notes ) ],
+  [ 2, 2, 5 / 4 ],
+  'notes2ratios'
+);
+# get_ratios uses notes2ratios internally, though ratios only calculated
+# and saved in object when necessary
+$deeply->( [ $scala->get_ratios ], [ 2, 2, 5 / 4 ], 'notes2ratios' );
+
+plan tests => 29;
