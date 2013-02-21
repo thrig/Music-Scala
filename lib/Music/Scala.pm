@@ -36,8 +36,8 @@ sub new {
 
 sub get_description {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_scala}->{description};
-  return $self->{_scala}->{description} // '';
+  croak 'no scala loaded' if !exists $self->{_description};
+  return $self->{_description} // '';
 }
 
 # No method for getting the spec file note count value as that's a) not
@@ -45,12 +45,18 @@ sub get_description {
 # returns as array in scalar context.
 sub get_notes {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_scala}->{notes};
-  return $self->{_scala}->{notes};
+  croak 'no scala loaded' if !exists $self->{_notes};
+  return @{ $self->{_notes} };
 }
 
 sub read_scala {
-  my ( $self, %param ) = @_;
+  my $self = shift;
+  my %param;
+  if ( @_ == 1 ) {
+    $param{file} = $_[0];
+  } else {
+    %param = @_;
+  }
 
   my $fh;
   if ( exists $param{file} ) {
@@ -83,7 +89,7 @@ sub read_scala {
     croak 'missing description or note count lines';
   }
 
-  $self->{_scala}->{description} = shift @scala;
+  $self->{_description} = shift @scala;
   my $NOTECOUNT;
   if ( $scala[-1] =~ m/^\s*([0-9]+)/ ) {
     $NOTECOUNT = $1;
@@ -92,7 +98,7 @@ sub read_scala {
   }
 
   my @notes;
-  my $notes_to_read = $NOTECOUNT;
+  my $cur_note = 1;
   while ( !eof($fh) ) {
     my $line = readline $fh;
     croak 'readline failed: ' . $! unless defined $line;
@@ -116,11 +122,15 @@ sub read_scala {
       $ratio .= '/1' if $ratio !~ m{/};
       push @notes, $ratio;
     } else {
-      # nothing in the spec about non-matching lines, so blow up
-      croak 'invalid note specification at line ' . $.;
+      # Nothing in the spec about non-matching lines, so blow up.
+      # However, there are six files in scales.zip that have trailing
+      # blank lines, though these blank lines occur only after an
+      # appropriate number of note entries. So must exit loop before
+      # reading those invalid? lines.
+      croak 'invalid note specification on line ' . $.;
     }
 
-    last if $notes_to_read-- < 1;
+    last if $cur_note++ >= $NOTECOUNT;
   }
   if ( @notes != $NOTECOUNT ) {
     croak 'expected '
@@ -129,7 +139,7 @@ sub read_scala {
       . scalar(@notes)
       . " notes";
   }
-  $self->{_scala}->{notes} = \@notes;
+  $self->{_notes} = \@notes;
 
   return $self;
 }
@@ -139,27 +149,33 @@ sub set_description {
   croak 'description must be string value'
     if !defined $desc
     or defined reftype $desc;
-  $self->{_scala}->{description} = $desc;
+  $self->{_description} = $desc;
   return $self;
 }
 
 sub set_notes {
-  my ( $self, $notes ) = @_;
-  croak 'notes must be array ref' if !defined $notes or ref $notes ne 'ARRAY';
-  $self->{_scala}->{notes} = [];
-  for my $n (@$notes) {
+  my $self = shift;
+  my @notes;
+  for my $n ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
     if ( $n !~ m{^(?:-?[0-9]+\.(?:[0-9]+)?|[0-9]+(?:/[0-9]+)?)$} ) {
       croak 'notes must be integer ratios or real numbers';
     }
-    push @{ $self->{_scala}->{notes} }, $n;
+    push @notes, $n;
   }
+  $self->{_notes} = \@notes;
   return $self;
 }
 
 sub write_scala {
-  my ( $self, %param ) = @_;
+  my $self = shift;
+  croak 'no scala loaded' if !exists $self->{_notes};
 
-  croak 'no scala loaded' if !exists $self->{_scala}->{notes};
+  my %param;
+  if ( @_ == 1 ) {
+    $param{file} = $_[0];
+  } else {
+    %param = @_;
+  }
 
   my $fh;
   if ( exists $param{file} ) {
@@ -175,13 +191,12 @@ sub write_scala {
     binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
   }
 
-  say $fh ( exists $self->{_scala}->{description}
-      and defined $self->{_scala}->{description} )
-    ? $self->{_scala}->{description}
+  say $fh ( exists $self->{_description} and defined $self->{_description} )
+    ? $self->{_description}
     : '';
-  say $fh ' ', scalar @{ $self->{_scala}->{notes} };
+  say $fh ' ', scalar @{ $self->{_notes} };
   say $fh '!';    # conventional comment between note count and notes
-  for my $note ( @{ $self->{_scala}->{notes} } ) {
+  for my $note ( @{ $self->{_notes} } ) {
     say $fh ' ', $note;
   }
 
@@ -197,18 +212,16 @@ Music::Scala - Scala scale support for Perl
 
 =head1 SYNOPSIS
 
-  use Music::Scala;
+  use Music::Scala ();
   my $scala = Music::Scala->new;
 
-  $scala->read_scala( file => 'bossart-muri.scl' );
-
+  $scala->read_scala('bossart-muri.scl');
   $scala->get_description;  # "Victor Ferdinand Bossart's..."
-  $scala->get_notes;        # [80.4499, 195.11250, ...]
+  $scala->get_notes;        # (80.4499, 195.11250, ...)
 
   $scala->set_description('Heavenly Chimes');
-  $scala->set_notes([qw{ 32/29 1/2 16/29 }]);
-
-  $scala->write_scala( file => 'chimes.scl' );
+  $scala->set_notes(qw{ 32/29 1/2 16/29 });
+  $scala->write_scala('chimes.scl');
 
 =head1 DESCRIPTION
 
@@ -224,8 +237,8 @@ there is reasonable C<*.scl> parsing support.
 
 =head1 METHODS
 
-Methods may B<die> or B<croak> under various conditions. B<new> would be
-a good one to start with.
+Methods will B<die> or B<croak> under various conditions, mostly related
+to bad input. B<new> would be a good one to start with.
 
 =over 4
 
@@ -237,11 +250,15 @@ previous method call.
 
 =item B<get_notes>
 
-Returns, as an array reference, the "notes" of the scala, but throws an
-exception if this field has not been set by some previous method. The
-notes are either real numbers (representing values in cents, or 1/1200
-of an octave (these may be negative)) or otherwise integer ratios (e.g.
+Returns, as a list, the "notes" of the scala, but throws an exception if
+this field has not been set by some previous method. The notes are
+either real numbers (representing values in cents, or 1/1200 of an
+octave (these may be negative)) or otherwise integer ratios (e.g.
 C<3/2> or C<2>).
+
+  $scala->read_scala(file => $some_file);
+  my @notes = $scala->get_notes;
+  if (@notes == 12) { ...
 
 The implicit C<1/1> for unison is not contained in the array reference
 of notes; the first element is for the 2nd degree of the scale (e.g. the
@@ -276,16 +293,19 @@ data. Sanity check high water mark in the event bad input is passed.
 
 =back
 
-=item B<read_scala> I<file =E<gt> 'filename'> | I<fh =E<gt> $fh>
+=item B<read_scala> I<filename>
 
-Parses a scala I<file> (or instead filehandle via the I<fh> option),
-perhaps also with a I<binmode> specification (same as documented under
-the B<new> method). Will throw some kind of exception if anything at all
-is wrong with the input. Use the C<get_*> methods to obtain the scala
-data thus parsed.
+Parses a scala file. Will throw some kind of exception if anything at
+all is wrong with the input. Use the C<get_*> methods to obtain the
+scala data thus parsed. Comments in the input file are ignored, so
+anything subsequently written using B<write_scala> will lack those.
 
-Comments in the input file are ignored, so anything subsequently written
-using B<write_scala> will lack those.
+As an alternative, accepts also I<file> or I<fh> hash keys, along with
+I<binmode> as in the B<new> method:
+
+  $scala->read_scala('somefile');
+  $scala->read_scala( file => 'file.scl', binmode => ':crlf' );
+  $scala->read_scala( fh   => $input_fh );
 
 Returns the Music::Scala object, so can be chained with other calls.
 
@@ -294,26 +314,50 @@ Returns the Music::Scala object, so can be chained with other calls.
 Sets the description. Should be a string. Returns the Music::Scala
 object, so can be chained with other calls.
 
-=item B<set_notes> I<array_ref>
+=item B<set_notes> I<array_or_array_ref>
 
-Sets the notes. Should be an array reference, ideally containing values
-in ratios or cents as per the Scala scale file specification. Returns
-the Music::Scala object, so can be chained with other calls.
+Sets the notes. Can be either an array, or an array reference, ideally
+containing values in ratios or cents as per the Scala scale file
+specification, and the method will throw an exception if these ideals
+are not met. Returns the Music::Scala object, so can be chained with
+other calls.
 
-=item B<write_scala> I<file =E<gt> 'filename'> | I<fh =E<gt> $fh>
+=item B<write_scala> I<filename>
 
-Writes a scala I<file> (or instead to the I<fh> filehandle), perhaps
-also with a I<binmode> specification (as for other methods, above). Will
-throw some kind of exception if anything at all is wrong, such as not
-having scala data loaded in the object.
+Writes a scala file. Will throw some kind of exception if anything at
+all is wrong, such as not having scala data loaded in the object. Like
+B<read_scala> alternatively accepts I<file> or I<fh> hash keys, along
+with a I<binmode> option to set the output encoding.
 
-Data will likely not be written until a I<fh> passed is closed. If this
-seems surprising, see L<http://perl.plover.com/FAQs/Buffering.html> to
-learn why it is not.
+  $scala->write_scala('out.scl');
+  $scala->write_scala( file => 'out.scl', binmode => ':crlf' );
+  $scala->write_scala( fh => $output_fh );
+
+Data will likely not be written until the I<fh> passed is closed. If
+this seems surprising, see L<http://perl.plover.com/FAQs/Buffering.html>
+to learn why it is not.
 
 Returns the Music::Scala object, so can be chained with other calls.
 
 =back
+
+=head1 EXAMPLES
+
+Print names of any scala files whose note count is 12 (only about 29% of
+the C<scales.zip> as of 2013-02-20).
+
+  #!/usr/bin/env perl
+  use strict;
+  use warnings;
+  use feature qw/say/;
+  
+  use Music::Scala ();
+  my $s = Music::Scala->new;
+  
+  for my $file ( glob('*.scl') ) {
+    eval { say $file if $s->read_scala($file)->get_notes == 12 };
+    warn "could not parse '$file': $@" if $@;
+  }
 
 =head1 SEE ALSO
 
@@ -326,7 +370,7 @@ read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
 one centuries of development behind these topics).
 
 L<http://github.com/thrig/Music-Scala> for the perhaps more current
-version of the code, or to report bugs, etc.
+version of this code, or to report bugs, etc.
 
 =head1 AUTHOR
 

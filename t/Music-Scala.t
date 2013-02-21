@@ -36,7 +36,7 @@ is(
   'Latin 1 infested'
 );
 $deeply->(
-  $scala->get_notes,
+  [ $scala->get_notes ],
   [ qw{256/243 189.25008 32/27 386.60605 4/3 1024/729 693.17509 128/81 887.27506 16/9 1086.80812 2/1}
   ],
   'Bach temperament'
@@ -47,7 +47,7 @@ $deeply->(
 $scala->read_scala( file => 'valid-pitch-lines.scl' );
 is( $scala->get_description, '', 'blank desc' );
 $deeply->(
-  $scala->get_notes,
+  [ $scala->get_notes ],
   [qw{81/64 408.0 408. 5/1 -5.0 10/20 100.0 100.0 5/4}],
   'valid pitch lines'
 );
@@ -66,7 +66,7 @@ is(
 );
 # but crlf handling should not affect the note parsing...
 $deeply->(
-  $scala->get_notes,
+  [ $scala->get_notes ],
   [ qw{256/243 189.25008 32/27 386.60605 4/3 1024/729 693.17509 128/81 887.27506 16/9 1086.80812 2/1}
   ],
   'Bach temperament'
