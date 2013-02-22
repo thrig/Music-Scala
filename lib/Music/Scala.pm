@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.40';
+our $VERSION = '0.50';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -21,6 +21,17 @@ my $MAX_LINES = 3000;
 ########################################################################
 #
 # SUBROUTINES
+
+# MIDI calculation, for easy comparison to scala results
+sub freq2pitch {
+  my ( $self, $freq ) = @_;
+  croak "frequency must be a positive number"
+    if !looks_like_number $freq
+    or $freq < 0;
+
+  return sprintf "%.0f",
+    69 + 12 * ( log( $freq / $self->{_concertpitch} ) / log(2) );
+}
 
 sub get_binmode {
   my ($self) = @_;
@@ -141,6 +152,16 @@ sub notes2ratios {
   }
 
   return @ratios > 1 ? @ratios : $ratios[0];
+}
+
+# MIDI for comparison, the other way
+sub pitch2freq {
+  my ( $self, $pitch ) = @_;
+  croak "pitch must be MIDI number"
+    if !looks_like_number $pitch
+    or $pitch < 0;
+
+  return $self->{_concertpitch} * ( 2**( ( $pitch - 69 ) / 12 ) );
 }
 
 sub read_scala {
@@ -335,6 +356,7 @@ Music::Scala - Scala scale support for Perl
   $scala->read_scala('groenewald_bach.scl');
   $scala->get_description; # "Jurgen Gronewald, si..."
   $scala->get_notes;       # (256/243, 189.25008, ...)
+  $scala->get_ratios;
 
   $scala->set_concertpitch(422.5);
   $scala->interval2freq(0, 1); # (422.5, 445.1)
@@ -345,6 +367,10 @@ Music::Scala - Scala scale support for Perl
 
   # or cents, note the quoting on .0 value
   $scala->set_notes(250.9, 483.3, 715.6, 951.1, '1200.0');
+
+  # MIDI equal temperament algos for comparison
+  $scala->pitch2freq(69);
+  $scala->freq2pitch(440);
 
 =head1 DESCRIPTION
 
@@ -359,6 +385,13 @@ Methods will B<die> or B<croak> under various conditions, mostly related
 to bad input. B<new> would be a good one to start with.
 
 =over 4
+
+=item B<freq2pitch> I<frequency>
+
+Converts the passed frequency (Hz) to the corresponding MIDI pitch
+number using the MIDI algorithm (equal temperament), as influenced by
+the I<concertpitch> setting. Unrelated to scala, but perhaps handy for
+comparison with results from B<interval2freq>.
 
 =item B<get_binmode>
 
@@ -474,6 +507,12 @@ data. Sanity check high water mark in the event bad input is passed.
 
 Given a list of notes, returns a list of corresponding ratios. Used
 internally by the B<get_ratios> and B<interval2freq> methods.
+
+=item B<pitch2freq> I<MIDI_pitch_number>
+
+Converts the given MIDI pitch number to a frequency using the MIDI
+conversion algorithm (equal temperament), as influenced by the
+I<concertpitch> setting.
 
 =item B<read_scala> I<filename>
 

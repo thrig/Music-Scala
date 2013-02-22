@@ -18,6 +18,10 @@ is( $scala->get_concertpitch, 440, 'default concert pitch' );
 is( $scala->get_description,  '',  'default description' );
 dies_ok( sub { $scala->get_notes }, 'get_notes before read_scala' );
 
+# for MIDI/equal temperament reference operations
+is( $scala->freq2pitch(440), 69,  'frequency to pitch, MIDI ref freq' );
+is( $scala->pitch2freq(69),  440, 'pitch to frequency, MIDI ref pitch' );
+
 dies_ok( sub { $scala->read_scala( file => 'Makefile.PL' ) },
   'invalid scala file' );
 
@@ -127,4 +131,4 @@ $deeply->(
 # and saved in object when necessary
 $deeply->( [ $scala->get_ratios ], [ 2, 2, 5 / 4 ], 'notes2ratios' );
 
-plan tests => 29;
+plan tests => 31;
