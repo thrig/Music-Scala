@@ -70,15 +70,15 @@ $scala = Music::Scala->new( MAX_LINES => 1 );
 dies_ok( sub { $scala->read_scala( file => 'groenewald_bach.scl' ) },
   'absurd MAX_LINES to cause exception' );
 
-# Global binmode specifier, plus no crlf handling
-$scala = Music::Scala->new( binmode => ':encoding(iso-8859-1)' );
+# Global binmode specifier, (testing not crlf is tricky, as Windows systems
+# assume it by default, blah blah blah)
+$scala = Music::Scala->new( binmode => ':encoding(iso-8859-1):crlf' );
 $scala->read_scala( file => 'groenewald_bach.scl' );
 is(
   $scala->get_description,
-  "J\x{fc}rgen Gr\x{f6}newald, simplified Bach temperament, Ars Organi vol.57 no.1, March 2009, p.39\r",
+  "J\x{fc}rgen Gr\x{f6}newald, simplified Bach temperament, Ars Organi vol.57 no.1, March 2009, p.39",
   'Latin 1 infested II'
 );
-# but crlf handling should not affect the note parsing...
 $deeply->(
   [ $scala->get_notes ],
   [ qw{256/243 189.25008 32/27 386.60605 4/3 1024/729 693.17509 128/81 887.27506 16/9 1086.80812 2/1}
