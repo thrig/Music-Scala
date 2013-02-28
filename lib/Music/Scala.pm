@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.51';
+our $VERSION = '0.52';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -512,6 +512,10 @@ I<description> field of the scala definition will be printed or saved
 elsewhere. See L<perluniintro> for details. Note that both B<read_scala>
 and B<write_scala> will use this same global I<binmode> value if no
 I<binmode> is passed to those methods.
+
+Note that Perl on Windows systems tends to turn on C<:crlf>. For scala
+scale files, it probably should be specified, regardless of the
+operating system.
 
 =item *
 
