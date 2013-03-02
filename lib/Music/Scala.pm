@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.52';
+our $VERSION = '0.53';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -489,7 +489,11 @@ point math:
 
   $scala->interval2freq(1);   # 879.999999999999
 
-  sprintf "%.2f", $scala->interval2freq(1); # 880.00
+  sprintf "%.*f", 0, $scala->interval2freq(1);   # 880
+
+L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What
+Every Computer Scientist Should Know About Floating-Point Arithmetic".
+David Goldberg, Computing Surveys, March 1991.
 
 =item B<new> I<optional_params>, ...
 
