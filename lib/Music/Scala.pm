@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.60';
+our $VERSION = '0.61';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -37,6 +37,7 @@ sub freq2pitch {
     if !looks_like_number $freq
     or $freq < 0;
 
+  # no precision, as assume pitch numbers are integers
   return sprintf "%.0f",
     $self->{_concertpitch} +
     12 * ( log( $freq / $self->{_concertfreq} ) / log(2) );
@@ -431,9 +432,10 @@ to bad input. B<new> would be a good one to start with.
 
 =over 4
 
-=item B<cents2ratio> I<cents>
+=item B<cents2ratio> I<cents>, [ I<precision> ]
 
-Converts a value in cents (e.g. 1200) to a ratio (e.g. 2).
+Converts a value in cents (e.g. 1200) to a ratio (e.g. 2). An optional
+precision for C<sprintf> can be supplied; the default precision is 2.
 
 =item B<freq2pitch> I<frequency>
 
@@ -576,9 +578,10 @@ Converts the given MIDI pitch number to a frequency using the MIDI
 conversion algorithm (equal temperament), as influenced by the
 I<concertfreq> setting.
 
-=item B<ratio2cents> I<ratio>
+=item B<ratio2cents> I<ratio>, [ I<precision> ]
 
-Converts a ratio (e.g. 2) to a value in cents (e.g. 1200).
+Converts a ratio (e.g. 2) to a value in cents (e.g. 1200). An optional
+precision for C<sprintf> can be supplied; the default precision is 2.
 
 =item B<read_scala> I<filename>
 
