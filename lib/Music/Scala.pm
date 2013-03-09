@@ -373,6 +373,8 @@ sub write_scala {
     binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
   }
 
+  say $fh ( exists $param{file} ) ? "! $param{file}" : '!';
+  say $fh '!';
   say $fh ( exists $self->{_description} and defined $self->{_description} )
     ? $self->{_description}
     : '';

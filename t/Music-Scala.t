@@ -93,7 +93,8 @@ my $output = '';
 open my $ofh, '>', \$output or die 'could not open in-memory fh ' . $!;
 isa_ok( $scala->write_scala( fh => $ofh ), 'Music::Scala' );
 close $ofh;
-is( $output, "test\r\n 2\r\n!\r\n 256/243\r\n 9/8\r\n", 'output to fh' );
+is( $output, "!\r\n!\r\ntest\r\n 2\r\n!\r\n 256/243\r\n 9/8\r\n",
+  'output to fh' );
 
 isa_ok( $scala->set_concertfreq(123.4), 'Music::Scala' );
 is( $scala->get_concertfreq, 123.4, 'custom concert frequency' );
