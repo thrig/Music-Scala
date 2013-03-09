@@ -664,32 +664,8 @@ Returns the Music::Scala object, so can be chained with other calls.
 
 =head1 EXAMPLES
 
-Print names of any scala files whose note count is 12 (only about 29% of
-the C<scales.zip> as of 2013-02-20).
-
-  #!/usr/bin/env perl
-  use strict;
-  use warnings;
-  use feature qw/say/;
-  
-  use Music::Scala ();
-  my $s = Music::Scala->new;
-  
-  for my $file ( glob('*.scl') ) {
-    eval { say $file if $s->read_scala($file)->get_notes == 12 };
-    warn "could not parse '$file': $@" if $@;
-  }
-
-Another interesting question is which scales contain the octave (and
-whether that octave is also the ultimate element of the note list). This
-requires converting the "notes" into actual ratios, as otherwise an
-octave might be represented as C<2/1> or C<1200.0> or C<4/2> or so
-forth. Roughly 87% of the scales are bounded at the octave:
-
-  for my $file ( glob('*.scl') ) {
-    my @ratios = $s->read_scala($file)->get_ratios;
-    if ( $ratios[-1] == 2 ) { say $file }
-  }
+Check the C<eg/> and C<t/> directories of the distribution of this
+module for example code.
 
 =head1 SEE ALSO
 
@@ -700,9 +676,6 @@ Scales, tunings, and temperament would be good music theory topics to
 read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
 (among many other more in-depth treatments stemming from the more than
 one centuries of development behind these topics).
-
-Check the C<eg/> and C<t/> directories of the distribution of this
-module for example code.
 
 L<http://github.com/thrig/Music-Scala> for the perhaps more current
 version of this code, or to report bugs, etc.
