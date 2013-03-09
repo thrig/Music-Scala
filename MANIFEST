@@ -3,6 +3,7 @@ MANIFEST
 Makefile.PL
 README
 eg/README
+eg/fitness
 eg/screen
 eg/screen-octaves
 eg/show-major-third-ratios
