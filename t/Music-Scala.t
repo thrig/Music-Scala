@@ -122,6 +122,11 @@ is( $scala->get_binmode, undef, 'default binmode' );
 isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala' );
 is( $scala->get_binmode, ':crlf', 'custom binmode' );
 
+# another edge case is scales that begin with 1/1, which is implicit in
+# this module, so must be dealt with if present
+$scala->read_scala('slen_pel16.scl');
+is (($scala->get_cents)[0], '150.000', 'check that 1/1 removed at head');
+
 $scala->set_notes( '2/1', '1200.0', '5/4' );
 
 $deeply->(
@@ -162,4 +167,4 @@ is(
   'cents2ratio octave'
 );
 
-plan tests => 37;
+plan tests => 38;

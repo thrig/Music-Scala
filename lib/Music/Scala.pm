@@ -314,6 +314,11 @@ sub read_scala {
       . scalar(@notes)
       . " notes";
   }
+
+  # edge case: remove any 1/1 (zero cents) at head of the list, as this
+  # implementation treats that as implicit
+  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+
   $self->{_notes}  = \@notes;
   $self->{_cents}  = undef;
   $self->{_ratios} = undef;
@@ -370,6 +375,11 @@ sub set_notes {
       croak 'notes must be integer ratios or real numbers';
     }
   }
+
+  # edge case: remove any 1/1 (zero cents) at head of the list, as this
+  # implementation treats that as implicit
+  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+
   $self->{_notes}  = \@notes;
   $self->{_cents}  = undef;
   $self->{_ratios} = undef;
