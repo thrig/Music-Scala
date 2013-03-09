@@ -2,6 +2,10 @@ LICENSE
 MANIFEST
 Makefile.PL
 README
+eg/README
+eg/screen
+eg/screen-octaves
+eg/show-major-third-ratios
 groenewald_bach.scl
 lib/Music/Scala.pm
 t/Music-Scala.t

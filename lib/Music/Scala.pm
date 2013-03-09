@@ -418,7 +418,8 @@ Music::Scala - Scala scale support for Perl
   $scala->pitch2freq(69);
   $scala->freq2pitch(440);
 
-And more...
+And more; see also the C<eg/> and C<t/> directories of the distribution
+of this module for example code.
 
 =head1 DESCRIPTION
 
@@ -699,6 +700,9 @@ Scales, tunings, and temperament would be good music theory topics to
 read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
 (among many other more in-depth treatments stemming from the more than
 one centuries of development behind these topics).
+
+Check the C<eg/> and C<t/> directories of the distribution of this
+module for example code.
 
 L<http://github.com/thrig/Music-Scala> for the perhaps more current
 version of this code, or to report bugs, etc.
