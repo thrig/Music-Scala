@@ -12,7 +12,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.53';
+our $VERSION = '0.60';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -22,10 +22,18 @@ my $MAX_LINES = 3000;
 #
 # SUBROUTINES
 
+sub cents2ratio {
+  my ( $self, $cents, $precision ) = @_;
+  croak 'cents must be a number' if !looks_like_number $cents;
+  $precision //= 2;
+
+  return sprintf "%.*f", $precision, 10**( $cents / 3986.31371386484 );
+}
+
 # MIDI calculation, for easy comparison to scala results
 sub freq2pitch {
   my ( $self, $freq ) = @_;
-  croak "frequency must be a positive number"
+  croak 'frequency must be a positive number'
     if !looks_like_number $freq
     or $freq < 0;
 
@@ -178,6 +186,15 @@ sub pitch2freq {
 
   return $self->{_concertfreq} *
     ( 2**( ( $pitch - $self->{_concertpitch} ) / 12 ) );
+}
+
+sub ratio2cents {
+  my ( $self, $ratio, $precision ) = @_;
+  croak 'ratio must be a number' if !looks_like_number $ratio;
+  $precision //= 2;
+
+  return sprintf "%.*f", $precision,
+    1200 * ( ( log($ratio) / 2.30258509299405 ) / 0.301029995663981 );
 }
 
 sub read_scala {
@@ -398,6 +415,8 @@ Music::Scala - Scala scale support for Perl
   $scala->pitch2freq(69);
   $scala->freq2pitch(440);
 
+And more...
+
 =head1 DESCRIPTION
 
 Scala scale support for Perl: reading, writing, setting, and interval to
@@ -411,6 +430,10 @@ Methods will B<die> or B<croak> under various conditions, mostly related
 to bad input. B<new> would be a good one to start with.
 
 =over 4
+
+=item B<cents2ratio> I<cents>
+
+Converts a value in cents (e.g. 1200) to a ratio (e.g. 2).
 
 =item B<freq2pitch> I<frequency>
 
@@ -552,6 +575,10 @@ internally by the B<get_ratios> and B<interval2freq> methods.
 Converts the given MIDI pitch number to a frequency using the MIDI
 conversion algorithm (equal temperament), as influenced by the
 I<concertfreq> setting.
+
+=item B<ratio2cents> I<ratio>
+
+Converts a ratio (e.g. 2) to a value in cents (e.g. 1200).
 
 =item B<read_scala> I<filename>
 

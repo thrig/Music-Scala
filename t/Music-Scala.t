@@ -137,4 +137,15 @@ $deeply->(
   'notes2ratios'
 );
 
-plan tests => 31;
+is( $scala->ratio2cents( 2, 0 ), 1200, 'ratio2cents octave' );
+is( $scala->cents2ratio( 1200, 0 ), 2, 'cents2ratio octave' );
+
+is( $scala->ratio2cents( 5 / 4 ),
+  386.31, 'ratio2cents natural chromatic major third' );
+is(
+  $scala->cents2ratio(386.31),
+  sprintf( "%.2f", 5 / 4 ),
+  'cents2ratio octave'
+);
+
+plan tests => 35;
