@@ -123,6 +123,15 @@ isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala' );
 is( $scala->get_binmode, ':crlf', 'custom binmode' );
 
 $scala->set_notes( '2/1', '1200.0', '5/4' );
+
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s }
+      $scala->notes2cents( $scala->get_notes )
+  ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 1200, 1200, 386.31 ],
+  'notes2cents'
+);
+
 $deeply->(
   [ map { my $s = sprintf "%.2f", $_; $s }
       $scala->notes2ratios( $scala->get_notes )
@@ -130,8 +139,12 @@ $deeply->(
   [ map { my $s = sprintf "%.2f", $_; $s } 2, 2, 5 / 4 ],
   'notes2ratios'
 );
-# get_ratios uses notes2ratios internally, though ratios only calculated
-# and saved in object when necessary
+
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_cents ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 1200, 1200, 386.31 ],
+  'notes2ratios'
+);
 $deeply->(
   [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
   [ map { my $s = sprintf "%.2f", $_; $s } 2, 2, 5 / 4 ],
@@ -149,4 +162,4 @@ is(
   'cents2ratio octave'
 );
 
-plan tests => 35;
+plan tests => 37;
