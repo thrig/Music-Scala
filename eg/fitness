@@ -53,13 +53,16 @@ FILE: for my $file ( grep { $_ ne $reference_scala } glob('*.scl') ) {
   my $ratio_ultima = sprintf "%.0f", $cents[-1];
 
   my @fits;
+  my $prev_c = 0;
   for my $c (@cents) {
     # some scales have negative cents--skip these, want ascending-
-    # only scales
-    next FILE if $c < 0;
+    # only scales (nor subharmonic or whatever scales that repeat)
+    next FILE if $c < 0 or $c <= $prev_c;
 
     #push @fits, min map { my $delta = ( $c - $_ )**2; $delta } @ref_cents;
     push @fits, min map { my $delta = abs( $c - $_ ); $delta } @ref_cents;
+
+    $prev_c = $c;
   }
 
   # do not care about perfect fits (presumably subsets of the
