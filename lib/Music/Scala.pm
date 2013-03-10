@@ -13,9 +13,10 @@ use strict;
 use warnings;
 
 use Carp qw/croak/;
+use File::Basename qw/basename/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.70';
+our $VERSION = '0.80';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -53,7 +54,7 @@ sub get_binmode {
 
 sub get_cents {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_notes};
+  croak 'no scala loaded' unless @{ $self->{_notes} };
   if ( !defined $self->{_ratios} ) {
     $self->{_cents} = [ $self->notes2cents( $self->{_notes} ) ];
   }
@@ -80,22 +81,28 @@ sub get_description {
 # returns as array in scalar context.
 sub get_notes {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_notes};
+  croak 'no scala loaded' unless @{ $self->{_notes} };
   return @{ $self->{_notes} };
 }
 
 sub get_ratios {
   my ($self) = @_;
-  croak 'no scala loaded' if !exists $self->{_notes};
+  croak 'no scala loaded' unless @{ $self->{_notes} };
   if ( !defined $self->{_ratios} ) {
     $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
   }
   return @{ $self->{_ratios} };
 }
 
+sub get_ref {
+  my ($self) = @_;
+  croak 'no scala loaded' unless @{ $self->{_notes} };
+  return $self->{_notes};
+}
+
 sub interval2freq {
   my $self = shift;
-  croak 'no scala loaded' if !exists $self->{_notes};
+  croak 'no scala loaded' unless @{ $self->{_notes} };
 
   if ( !defined $self->{_ratios} ) {
     $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
@@ -159,7 +166,9 @@ sub new {
   $self->{_MAX_LINES} =
     exists $param{MAX_LINES} ? $param{MAX_LINES} : $MAX_LINES;
 
+  # RESET_DUP_CODE
   $self->{_cents}  = undef;
+  $self->{_notes}  = [];
   $self->{_ratios} = undef;
 
   bless $self, $class;
@@ -319,10 +328,20 @@ sub read_scala {
   # implementation treats that as implicit
   shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
 
-  $self->{_notes}  = \@notes;
+  @{ $self->{_notes} } = @notes;
+  # RESET_DUP_CODE
   $self->{_cents}  = undef;
   $self->{_ratios} = undef;
 
+  return $self;
+}
+
+sub reset {
+  my ( $self, $everything ) = @_;
+  # RESET_DUP_CODE
+  $self->{_cents}  = undef;
+  $self->{_ratios} = undef;
+  @{ $self->{_notes} } = () if $everything;
   return $self;
 }
 
@@ -380,7 +399,8 @@ sub set_notes {
   # implementation treats that as implicit
   shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
 
-  $self->{_notes}  = \@notes;
+  @{ $self->{_notes} } = @notes;
+  # RESET_DUP_CODE
   $self->{_cents}  = undef;
   $self->{_ratios} = undef;
   return $self;
@@ -388,7 +408,7 @@ sub set_notes {
 
 sub write_scala {
   my $self = shift;
-  croak 'no scala loaded' if !exists $self->{_notes};
+  croak 'no scala loaded' unless @{ $self->{_notes} };
 
   my %param;
   if ( @_ == 1 ) {
@@ -411,12 +431,15 @@ sub write_scala {
     binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
   }
 
-  say $fh ( exists $param{file} ) ? "! $param{file}" : '!';
+  my $filename = basename($param{file}) if exists $param{file};
+  my $note_count = @{ $self->{_notes} } || 0;
+
+  say $fh defined $filename ? "! $filename" : '!';
   say $fh '!';
   say $fh ( exists $self->{_description} and defined $self->{_description} )
     ? $self->{_description}
     : '';
-  say $fh ' ', scalar @{ $self->{_notes} };
+  say $fh ' ', $note_count;
   say $fh '!';    # conventional comment between note count and notes
   for my $note ( @{ $self->{_notes} } ) {
     say $fh ' ', $note;

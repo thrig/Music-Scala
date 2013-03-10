@@ -10,6 +10,7 @@ my %params = (
   ABSTRACT     => 'Scala scale support for Perl',
   PREREQ_PM    => {
     Carp              => 0,
+    'File::Basename'  => 0,
     'Scalar::Util'    => 0,
     'Test::Exception' => 0,
     'Test::More'      => 0,
@@ -18,6 +19,10 @@ my %params = (
     ? ( AUTHOR => 'Jeremy Mates <jmates@cpan.org>' )
     : ()
   ),
+  # For File::Cmp related test code. Input scala are all under the root
+  # dir, so for tests must write to an alternate directory, as the
+  # convention is to include the file basename inside the file...
+  clean => { FILES => 't/*.scl' },
 );
 
 if ( $ExtUtils::MakeMaker::VERSION =~ /^\d\.\d\d$/ and $ExtUtils::MakeMaker::VERSION > 6.30 ) {

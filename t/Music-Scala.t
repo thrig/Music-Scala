@@ -6,6 +6,9 @@ use warnings;
 use Test::More;    # plan is down at bottom
 use Test::Exception;
 
+eval 'use File::Cmp';
+my $can_file_cmp = $@ ? 0 : 1;
+
 eval 'use Test::Differences';    # display convenience
 my $deeply = $@ ? \&is_deeply : \&eq_or_diff;
 
@@ -29,8 +32,8 @@ dies_ok( sub { $scala->read_scala( file => 'Makefile.PL' ) },
 # characters in the description.
 isa_ok(
   $scala->read_scala(
+    binmode => ':encoding(iso-8859-1):crlf',
     file    => 'groenewald_bach.scl',
-    binmode => ':encoding(iso-8859-1):crlf'
   ),
   'Music::Scala'
 );
@@ -55,6 +58,20 @@ $deeply->(
   ],
   'frequency conversion'
 );
+
+SKIP: {
+  skip 'File::Cmp not available', 2 unless $can_file_cmp;
+
+  isa_ok(
+    $scala->write_scala(
+      binmode => ':encoding(iso-8859-1):crlf',
+      file    => 't/groenewald_bach.scl',
+    ),
+    'Music::Scala'
+  );
+  ok( File::Cmp::fcmp( 'groenewald_bach.scl', 't/groenewald_bach.scl' ),
+    'groenewald in, groenewald out' );
+}
 
 # These were copied & pasted from scala site, plus blank desc and number
 # of subsequent notes to create a minimally valid file.
@@ -125,7 +142,11 @@ is( $scala->get_binmode, ':crlf', 'custom binmode' );
 # another edge case is scales that begin with 1/1, which is implicit in
 # this module, so must be dealt with if present
 $scala->read_scala('slen_pel16.scl');
-is (($scala->get_cents)[0], '150.000', 'check that 1/1 removed at head');
+is( ( $scala->get_cents )[0], '150.000', 'check that 1/1 removed at head' );
+
+# Leave these undocumented for now...
+is( ref $scala->get_ref, 'ARRAY', 'get notes ref' );
+isa_ok( $scala->reset, 'Music::Scala' );
 
 $scala->set_notes( '2/1', '1200.0', '5/4' );
 
@@ -167,4 +188,4 @@ is(
   'cents2ratio octave'
 );
 
-plan tests => 38;
+plan tests => 42;
