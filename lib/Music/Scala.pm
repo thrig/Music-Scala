@@ -359,13 +359,14 @@ sub set_binmode {
 # frequency.
 sub set_by_frequency {
   my $self = shift;
-  my $root_freq = ref $_[0] eq 'ARRAY' ? shift @{ $_[0] } : shift;
+  my $freqs = ref $_[0] eq 'ARRAY' ? $_[0] : \@_;
+  croak 'need both root and other frequencies' if @$freqs < 2;
 
   my @notes;
-  for my $freq ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
+  for my $i ( 1 .. $#{$freqs} ) {
     push @notes,
-      1200 * (
-      ( log( $freq / $root_freq ) / 2.30258509299405 ) / 0.301029995663981 );
+      1200 * ( ( log( $freqs->[$i] / $freqs->[0] ) / 2.30258509299405 ) /
+        0.301029995663981 );
   }
 
   # edge case: remove any 1/1 (zero cents) at head of the list, as this
@@ -460,16 +461,20 @@ sub write_scala {
     binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
   }
 
-  my $filename = basename( $param{file} ) if exists $param{file};
+  my $filename = basename( $param{file} )
+    if exists $param{file};
   my $note_count = @{ $self->{_notes} } || 0;
 
-  say $fh defined $filename ? "! $filename" : '!';
+  say $fh defined $filename
+    ? "! $filename"
+    : '!';
   say $fh '!';
   say $fh ( exists $self->{_description} and defined $self->{_description} )
     ? $self->{_description}
     : '';
   say $fh ' ', $note_count;
   say $fh '!';    # conventional comment between note count and notes
+
   for my $note ( @{ $self->{_notes} } ) {
     say $fh ' ', $note;
   }
