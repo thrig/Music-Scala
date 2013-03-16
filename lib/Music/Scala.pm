@@ -5,6 +5,9 @@
 #
 # Ratio to cent and cent to ratio equations lifted from "Musimathics,
 # volume 1", pp. 45-46.
+#
+# TODO test scala file with negative cents, make sure various things
+# behave wrt that.
 
 package Music::Scala;
 
@@ -16,7 +19,7 @@ use Carp qw/croak/;
 use File::Basename qw/basename/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.80';
+our $VERSION = '0.81';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -351,6 +354,32 @@ sub set_binmode {
   return $self;
 }
 
+# Given list of frequencies, assume first is root frequency, then
+# convert the remainder of the frequences to cents against that first
+# frequency.
+sub set_by_frequency {
+  my $self = shift;
+  my $root_freq = ref $_[0] eq 'ARRAY' ? shift @{ $_[0] } : shift;
+
+  my @notes;
+  for my $freq ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
+    push @notes,
+      1200 * (
+      ( log( $freq / $root_freq ) / 2.30258509299405 ) / 0.301029995663981 );
+  }
+
+  # edge case: remove any 1/1 (zero cents) at head of the list, as this
+  # implementation treats that as implicit
+  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+
+  @{ $self->{_notes} } = @notes;
+  # RESET_DUP_CODE
+  $self->{_cents}  = undef;
+  $self->{_ratios} = undef;
+
+  return $self;
+}
+
 sub set_concertfreq {
   my ( $self, $cf ) = @_;
   croak 'concert pitch must be a positive number (Hz)'
@@ -431,7 +460,7 @@ sub write_scala {
     binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
   }
 
-  my $filename = basename($param{file}) if exists $param{file};
+  my $filename = basename( $param{file} ) if exists $param{file};
   my $note_count = @{ $self->{_notes} } || 0;
 
   say $fh defined $filename ? "! $filename" : '!';
@@ -681,8 +710,18 @@ Returns the Music::Scala object, so can be chained with other calls.
 
 Sets the default C<binmode> layer used in B<read_scala> and
 B<write_scala> methods (unless a custom I<binmode> argument is passed to
-those calls). Returns the Music::Scala object, so can be chained with
-other calls.
+those calls).
+
+Returns the Music::Scala object, so can be chained with other calls.
+
+=item B<set_by_frequency> I<root_frequency>, I<frequencies...>
+
+Given a root frequency as the first argument, performs the equivalent of
+B<set_notes> except creating the intervals on the fly based on the
+I<root_frequency> supplied. Handy if you have a list of frequencies from
+somewhere, and need that converted to cents or ratios.
+
+Returns the Music::Scala object, so can be chained with other calls.
 
 =item B<set_concertfreq> I<frequency>
 
@@ -696,16 +735,18 @@ will affect the B<freq2pitch> and B<pitch2freq> methods.
 
 =item B<set_description> I<description>
 
-Sets the description. Should be a string. Returns the Music::Scala
-object, so can be chained with other calls.
+Sets the description. Should be a string.
+
+Returns the Music::Scala object, so can be chained with other calls.
 
 =item B<set_notes> I<array_or_array_ref>
 
 Sets the notes. Can be either an array, or an array reference, ideally
 containing values in ratios or cents as per the Scala scale file
 specification, and the method will throw an exception if these ideals
-are not met. Returns the Music::Scala object, so can be chained with
-other calls.
+are not met.
+
+Returns the Music::Scala object, so can be chained with other calls.
 
 NOTE cents with no value past the decimal must be quoted in code, as
 otherwise Perl converts the value to C<1200> which the code then turns
@@ -740,6 +781,22 @@ Returns the Music::Scala object, so can be chained with other calls.
 Check the C<eg/> and C<t/> directories of the distribution of this
 module for example code.
 
+=head1 BUGS
+
+=head2 Reporting Bugs
+
+If the bug is in the latest version, send a report to the author.
+Patches that fix problems or add new features are welcome.
+
+L<http://github.com/thrig/Music-Scala>
+
+=head2 Known Issues
+
+Negative cents are likely not handled well, or at all. The
+specification frowns on negative ratios, but does allow for negative
+cents, so converting such negative cents to ratios might yield
+unexpected or wrong results.
+
 =head1 SEE ALSO
 
 L<http://www.huygens-fokker.org/scala/> by Manuel Op de Coul, and the
@@ -749,9 +806,6 @@ Scales, tunings, and temperament would be good music theory topics to
 read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
 (among many other more in-depth treatments stemming from the more than
 one centuries of development behind these topics).
-
-L<http://github.com/thrig/Music-Scala> for the perhaps more current
-version of this code, or to report bugs, etc.
 
 =head1 AUTHOR
 

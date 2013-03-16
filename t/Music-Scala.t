@@ -188,4 +188,18 @@ is(
   'cents2ratio octave'
 );
 
-plan tests => 42;
+isa_ok( $scala->set_by_frequency( 440, 880 ), 'Music::Scala' );
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 2 ],
+  'notes2ratios'
+);
+
+$scala->set_by_frequency( [ 440, 880, 1760 ] );
+$deeply->(
+  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
+  [ map { my $s = sprintf "%.2f", $_; $s } 2, 4 ],
+  'notes2ratios'
+);
+
+plan tests => 45;
