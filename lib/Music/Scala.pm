@@ -361,6 +361,7 @@ sub set_by_frequency {
   my $self = shift;
   my $freqs = ref $_[0] eq 'ARRAY' ? $_[0] : \@_;
   croak 'need both root and other frequencies' if @$freqs < 2;
+  croak 'root frequency must not be zero' if $freqs->[0] == 0;
 
   my @notes;
   for my $i ( 1 .. $#{$freqs} ) {
