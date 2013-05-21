@@ -17,5 +17,5 @@ for my $file ( glob('*.scl') ) {
   }
   catch {
     warn "could not parse '$file': $_\n";
-  }
+  };
 }
