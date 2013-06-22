@@ -1,1 +1,4 @@
 See the git repository.
+
+0.84 in particular fixed interval2freq to not suck terribly at negative
+     intervals, among other fixes and improvements.

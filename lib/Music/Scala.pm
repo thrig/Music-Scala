@@ -19,7 +19,7 @@ use Carp qw/croak/;
 use File::Basename qw/basename/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.83';
+our $VERSION = '0.84';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
@@ -47,7 +47,7 @@ sub freq2pitch {
   # no precision, as assume pitch numbers are integers
   return sprintf "%.0f",
     $self->{_concertpitch} +
-    12 * ( log( $freq / $self->{_concertfreq} ) / log(2) );
+    12 * ( log( $freq / $self->{_concertfreq} ) / 0.693147180559945 );
 }
 
 sub get_binmode {
@@ -66,12 +66,12 @@ sub get_cents {
 
 sub get_concertfreq {
   my ($self) = @_;
-  return $self->{_concertfreq} // 69;
+  return $self->{_concertfreq};
 }
 
 sub get_concertpitch {
   my ($self) = @_;
-  return $self->{_concertpitch} // 69;
+  return $self->{_concertpitch};
 }
 
 sub get_description {
@@ -103,6 +103,8 @@ sub get_ref {
   return $self->{_notes};
 }
 
+# something that would cache very well, assuming the scala and reference
+# pitch and frequency do not change, and sufficient memory exists
 sub interval2freq {
   my $self = shift;
   croak 'no scala loaded' unless @{ $self->{_notes} };
@@ -118,28 +120,66 @@ sub interval2freq {
     } else {
       my $is_dsc = $i < 0 ? 1 : 0;
 
-      # "Octave" portion (might be zero) - how many times the interval
-      # passes through the complete scale
-      my $octave_count  = abs int $i / @{ $self->{_ratios} };
-      my $octave_offset = $self->{_ratios}->[-1] * $octave_count;
-      $octave_offset = 1 / $octave_offset
-        if $is_dsc and $octave_offset != 0;
+      # for non-"octave" portion, if any
+      my $offset = $i % @{ $self->{_ratios} };
 
-      my $remainder = 0;
-      my $offset    = $i % @{ $self->{_ratios} };
-      if ( $offset != 0 ) {
-        # non-octave portion of remainder, if any
-        $offset--;
-        $remainder = $self->{_ratios}->[$offset];
-        $remainder = 1 / $remainder if $is_dsc and $remainder != 0;
+      # "Octave" portion, if any - how many times the interval passes
+      # through the complete scale
+      my $octave_freq  = 0;
+      my $octave_count = abs int $i / @{ $self->{_ratios} };
+
+      # if non-octave on a negative interval, go one octave past the
+      # target, then use the regular ascending logic to backtrack to the
+      # proper frequency
+      $octave_count++ if $is_dsc and $offset != 0;
+
+      if ( $octave_count > 0 ) {
+        my $octaves_ratio = $self->{_ratios}->[-1]**$octave_count;
+        $octaves_ratio = 1 / $octaves_ratio if $is_dsc;
+        $octave_freq = $self->{_concertfreq} * $octaves_ratio;
       }
 
-      push @freqs, $octave_offset * $self->{_concertfreq} +
-        $remainder * $self->{_concertfreq};
+      my $remainder_freq = 0;
+      if ( $offset != 0 ) {
+        $remainder_freq = ( $octave_freq || $self->{_concertfreq} ) *
+          $self->{_ratios}->[ $offset - 1 ];
+        # as remainder is based from $octave_freq, if relevant, so
+        # already includes such
+        $octave_freq = 0;
+      }
+
+      push @freqs, $octave_freq + $remainder_freq;
     }
   }
 
   return @freqs > 1 ? @freqs : $freqs[0];
+}
+
+sub is_octavish {
+  my $self = shift;
+  croak 'no scala loaded' unless @{ $self->{_notes} };
+
+  if ( !defined $self->{_ratios} ) {
+    $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
+  }
+
+  # not octave bounded
+  return 0 if $self->{_ratios}->[-1] != 2;
+
+  my $min;
+  for my $r ( @{ $self->{_ratios} } ) {
+    # don't know how to handle negative ratios
+    return 0 if $r < 0;
+
+    # multiple scales within the same definition file (probably for
+    # instruments that have two different scales in the same frequency
+    # domain) - but don't know how to handle these
+    return 0 if defined $min and $r <= $min;
+
+    $min = $r;
+  }
+
+  return 1;
 }
 
 sub new {
@@ -355,7 +395,7 @@ sub set_binmode {
 }
 
 # Given list of frequencies, assume first is root frequency, then
-# convert the remainder of the frequences to cents against that first
+# convert the remainder of the frequencies to cents against that first
 # frequency.
 sub set_by_frequency {
   my $self = shift;
@@ -525,6 +565,24 @@ frequency conversion methods are provided. The L</"SEE ALSO"> section
 links to the developer pages for the specification, along with an
 archive of scala files that define various tunings and temperaments.
 
+=head2 SEVERAL WORDS REGARDING FLOATING POINT NUMBERS
+
+Frequencies derived from scala scale calculations will likely need to be
+rounded due to floating point number representation limitations:
+
+  # octave, plus default concert pitch of 440, so expect 880
+  my $scala = Music::Scala->new->set_notes('1200.000');
+
+  $scala->interval2freq(1);   # 879.999999999999        (maybe)
+
+  sprintf "%.*f", 0, $scala->interval2freq(1);   # 880  (for sure)
+
+For more information, see:
+
+L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What
+Every Computer Scientist Should Know About Floating-Point Arithmetic".
+David Goldberg, Computing Surveys, March 1991.
+
 =head1 METHODS
 
 Methods will B<die> or B<croak> under various conditions, mostly related
@@ -543,6 +601,8 @@ Converts the passed frequency (Hz) to the corresponding MIDI pitch
 number using the MIDI algorithm (equal temperament), as influenced by
 the I<concertfreq> setting. Unrelated to scala, but perhaps handy for
 comparison with results from B<interval2freq>.
+
+This method *is not* influenced by the scala scale data.
 
 =item B<get_binmode>
 
@@ -596,11 +656,13 @@ the notes have not been set by some previous method.
 Converts a list of passed interval numbers (list or single array
 reference) to frequencies (in Hz) that are returned as a list. Interval
 numbers are integers, C<0> for unison, C<1> for the first interval
-(which would be a minor 2nd for a 12-note scale, but something different
-for scales of other sizes), and so on up to an octave or moral
-equivalent thereof, depending on the scale. Negative intervals take the
-frequency in the other direction, e.g. C<-1> for what in a 12-note
-system would be a minor 2nd downwards.
+(which would be a "minor 2nd" for a 12-note scale, but something
+different for scales of other sizes), and so on up to the "octave" (13%
+of the scala archive consists of non-octave bounded scales). Negative
+intervals take the frequency in the other direction, e.g. C<-1> for what
+in a 12-note system would be a minor 2nd downwards. Intervals past the
+"octave" consist of however many "octaves" are present in the scale,
+plus whatever remainder inside the "octave," if any.
 
 Conversions are based on the I<concertfreq> setting, which is 440Hz by
 default. Use B<set_concertfreq> to adjust this, for example to base the
@@ -612,19 +674,17 @@ Some scala files note what this value should be in the comments or
 description, or it may vary based on the specific software or
 instruments involved.
 
-The output frequencies may need to be rounded because of floating
-point math:
+There is no error checking for nonsense conditions: an interval of a
+15th makes no sense for a xylophone with only 10 keys in total. Audit
+the contents of the scala scale file to learn what its limits are, or
+screen for appropriate scales (the B<is_octavish> check may help),
+depending on the application.
 
-  # octave, plus default concert pitch of 440, so expect 880
-  my $scala = Music::Scala->new->set_notes('1200.000');
+=item B<is_octavish>
 
-  $scala->interval2freq(1);   # 879.999999999999
-
-  sprintf "%.*f", 0, $scala->interval2freq(1);   # 880
-
-L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What
-Every Computer Scientist Should Know About Floating-Point Arithmetic".
-David Goldberg, Computing Surveys, March 1991.
+Returns true if the scala scale has an ultimate ratio of 2:1, as well as
+no negative or repeated ratios; false otherwise. Throws an exception if
+no scala scale is loaded.
 
 =item B<new> I<optional_params>, ...
 
@@ -688,6 +748,8 @@ internally by the B<get_ratios> and B<interval2freq> methods.
 Converts the given MIDI pitch number to a frequency using the MIDI
 conversion algorithm (equal temperament), as influenced by the
 I<concertfreq> setting.
+
+This method *is not* influenced by the scala scale data.
 
 =item B<ratio2cents> I<ratio>, [ I<precision> ]
 

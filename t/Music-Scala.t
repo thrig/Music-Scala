@@ -50,10 +50,10 @@ $deeply->(
 );
 
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s }
+  [ map { sprintf "%.2f", $_ }
       $scala->interval2freq( 0, 12, 24, -12, -24, 1, 2, 3 )
   ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 440,
+  [ map { sprintf "%.2f", $_ } 440,
     880, 1760, 220, 110, 463.54, 490.83, 521.48
   ],
   'frequency conversion'
@@ -124,10 +124,8 @@ is( $scala->get_concertfreq, 295, 'check cf via new' );
 # becomes the ratio 1200/1 which is wrong.
 $scala->set_notes( 250.868, 483.311, 715.595, 951.130, '1200.000' );
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s }
-      $scala->interval2freq( 0, 5, 10, -5, -10 )
-  ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 295, 590, 1180, 147.5, 73.75 ],
+  [ map { sprintf "%.2f", $_ } $scala->interval2freq( 0, 5, 10, -5, -10 ) ],
+  [ map { sprintf "%.2f", $_ } 295, 590, 1180, 147.5, 73.75 ],
   'frequency conversion'
 );
 
@@ -151,29 +149,25 @@ isa_ok( $scala->reset, 'Music::Scala' );
 $scala->set_notes( '2/1', '1200.0', '5/4' );
 
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s }
-      $scala->notes2cents( $scala->get_notes )
-  ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 1200, 1200, 386.31 ],
+  [ map { sprintf "%.2f", $_ } $scala->notes2cents( $scala->get_notes ) ],
+  [ map { sprintf "%.2f", $_ } 1200, 1200, 386.31 ],
   'notes2cents'
 );
 
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s }
-      $scala->notes2ratios( $scala->get_notes )
-  ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 2, 2, 5 / 4 ],
+  [ map { sprintf "%.2f", $_ } $scala->notes2ratios( $scala->get_notes ) ],
+  [ map { sprintf "%.2f", $_ } 2, 2, 5 / 4 ],
   'notes2ratios'
 );
 
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_cents ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 1200, 1200, 386.31 ],
+  [ map { sprintf "%.2f", $_ } $scala->get_cents ],
+  [ map { sprintf "%.2f", $_ } 1200, 1200, 386.31 ],
   'notes2ratios'
 );
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 2, 2, 5 / 4 ],
+  [ map { sprintf "%.2f", $_ } $scala->get_ratios ],
+  [ map { sprintf "%.2f", $_ } 2, 2, 5 / 4 ],
   'notes2ratios'
 );
 
@@ -190,16 +184,56 @@ is(
 
 isa_ok( $scala->set_by_frequency( 440, 880 ), 'Music::Scala' );
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 2 ],
+  [ map { sprintf "%.2f", $_ } $scala->get_ratios ],
+  [ map { sprintf "%.2f", $_ } 2 ],
   'notes2ratios'
 );
 
 $scala->set_by_frequency( [ 440, 880, 1760 ] );
 $deeply->(
-  [ map { my $s = sprintf "%.2f", $_; $s } $scala->get_ratios ],
-  [ map { my $s = sprintf "%.2f", $_; $s } 2, 4 ],
+  [ map { sprintf "%.2f", $_ } $scala->get_ratios ],
+  [ map { sprintf "%.2f", $_ } 2, 4 ],
   'notes2ratios'
 );
 
-plan tests => 45;
+$scala->read_scala( file => 'equal.scl' );
+ok( $scala->is_octavish, 'equal temperament better be "octavish"' );
+
+# interval2freq had a negative interval bug in < 0.83, as I only tested
+# negative "octaves," and not the intervening negative intervals. Whoops!
+# So must check how MIDI numbers compare to interval calculations over a
+# few octaves, both below and above the concert pitch (69/A440).
+$deeply->(
+  [ map { sprintf "%.2f", $_ } $scala->interval2freq( -26 .. 26 ) ],
+  [ map { sprintf "%.2f", $scala->pitch2freq($_) } 43 .. 95 ],
+  'interval2freq equal pitch2freq over range'
+);
+
+# except equal temperament is a *bad* test by virtue of equally dividing
+# the octave: you do not know if you're counting up when you should
+# instead actually be counting down, or the reverse.
+$scala->read_scala( file => 'carlos_super.scl' );
+$deeply->(
+  [ map { sprintf "%.2f", $_ }
+      $scala->interval2freq( -13, -12, -11, -1, 0, 1, 12, 13 )
+  ],
+  [ map { sprintf "%.2f", $_ } 206.25,
+    220, 233.75, 412.5, 440, 467.5, 880, 935
+  ],
+  'interval2freq for just scale'
+);
+
+# and then there's (uncommon (13% of archive)) non-octave bounded scales
+# that will totally not match up with any MIDI pitch numbers but still
+# can have interval calculations applied to them...
+$scala->read_scala( file => 'xylophone2.scl' );
+ok( !$scala->is_octavish, 'not octave bounded' );
+# not a very good test, as worked out numbers by hand mostly using the
+# logic present in this module :/ independent verification would be nice
+$deeply->(
+  [ map { sprintf "%.2f", $_ } $scala->interval2freq( -1, 0, 1, 10, 11 ) ],
+  [ map { sprintf "%.2f", $_ } qw/392.22 440.00 496.46 1417.23 1599.08/ ],
+  'non-octave scale intervale2freq calcs'
+);
+
+plan tests => 50;

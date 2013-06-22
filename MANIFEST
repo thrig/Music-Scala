@@ -3,14 +3,17 @@ LICENSE
 MANIFEST
 Makefile.PL
 README
+carlos_super.scl
 eg/README
 eg/fitness
 eg/screen
 eg/screen-octaves
 eg/show-major-third-ratios
+equal.scl
 groenewald_bach.scl
 lib/Music/Scala.pm
 slen_pel16.scl
 t/Music-Scala.t
 t/pod.t
 valid-pitch-lines.scl
+xylophone2.scl
