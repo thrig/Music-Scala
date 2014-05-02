@@ -45,4 +45,4 @@ if ( $ExtUtils::MakeMaker::VERSION ge '6.48' ) {
   $params{MIN_PERL_VERSION} = 5.010000;
 }
 
-WriteMakefile(%params);
+WriteMakefile((MM->can('signature_target') ? (SIGN => 1) : ()), %params);

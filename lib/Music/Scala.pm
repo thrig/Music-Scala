@@ -19,7 +19,7 @@ use Carp qw/croak/;
 use File::Basename qw/basename/;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.84';
+our $VERSION = '0.85';
 
 # To avoid file reader from wasting too much time on bum input (longest
 # scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
