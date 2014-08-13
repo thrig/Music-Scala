@@ -2,14 +2,17 @@ Music::Scala - Scala scale support for Perl
 
 To install this module, use CPAN, for example:
 
-  cpanm Music::Scala
+  cpan Music::Scala
 
 For the current release, see:
 
 http://github.com/thrig/Music-Scala
 
-which can be installed by cloning that directory then running `cpanm .`
-therein.
+which can be installed once git and cpanm are installed by e.g.
+
+  git clone https://github.com/thrig/Music-Scala
+  cd Music-Scala
+  cpanm .
 
 DEPENDENCIES
 
@@ -20,8 +23,8 @@ http://www.huygens-fokker.org/docs/scales.zip will likely be of some use.
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2013 by Jeremy Mates
+Copyright (C) 2013,2014 by Jeremy Mates
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.16 or, at
-your option, any later version of Perl 5 you may have available.
+This library is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself, either Perl version 5.16 or, at your option, any
+later version of Perl 5 you may have available.

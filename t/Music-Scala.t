@@ -50,12 +50,9 @@ $deeply->(
 );
 
 $deeply->(
-  [ map { sprintf "%.2f", $_ }
-      $scala->interval2freq( 0, 12, 24, -12, -24, 1, 2, 3 )
+  [ map { sprintf "%.2f", $_ } $scala->interval2freq( 0, 12, 24, -12, -24, 1, 2, 3 )
   ],
-  [ map { sprintf "%.2f", $_ } 440,
-    880, 1760, 220, 110, 463.54, 490.83, 521.48
-  ],
+  [ map { sprintf "%.2f", $_ } 440, 880, 1760, 220, 110, 463.54, 490.83, 521.48 ],
   'frequency conversion'
 );
 
@@ -103,7 +100,7 @@ $deeply->(
   'Bach temperament'
 );
 
-isa_ok( $scala->set_description('test'), 'Music::Scala' );
+is( $scala->set_description('test'), 'test' );
 isa_ok( $scala->set_notes( [qw{256/243 9/8}] ), 'Music::Scala' );
 
 my $output = '';
@@ -113,7 +110,7 @@ close $ofh;
 is( $output, "!\r\n!\r\ntest\r\n 2\r\n!\r\n 256/243\r\n 9/8\r\n",
   'output to fh' );
 
-isa_ok( $scala->set_concertfreq(123.4), 'Music::Scala' );
+is( $scala->set_concertfreq(123.4), 123.4 );
 is( $scala->get_concertfreq, 123.4, 'custom concert frequency' );
 
 # more cents testing - via slendro_ky2.scl
@@ -130,21 +127,17 @@ $deeply->(
 );
 
 # file => via new() to save on then typing read_scala out
-$scala = Music::Scala->new( file => 'valid-pitch-lines.scl' );
-is( $scala->get_description, 'this is a test', 'desc' );
+$scala = Music::Scala->new( file => 'valid-pitch-lines.scl', cat => 42 );
+is( $scala->get_description, 'this is a test', 'get description' );
 
 is( $scala->get_binmode, undef, 'default binmode' );
-isa_ok( $scala->set_binmode(':crlf'), 'Music::Scala' );
+is( $scala->set_binmode(':crlf'), ':crlf' );
 is( $scala->get_binmode, ':crlf', 'custom binmode' );
 
 # another edge case is scales that begin with 1/1, which is implicit in
 # this module, so must be dealt with if present
 $scala->read_scala('slen_pel16.scl');
 is( ( $scala->get_cents )[0], '150.000', 'check that 1/1 removed at head' );
-
-# Leave these undocumented for now...
-is( ref $scala->get_ref, 'ARRAY', 'get notes ref' );
-isa_ok( $scala->reset, 'Music::Scala' );
 
 $scala->set_notes( '2/1', '1200.0', '5/4' );
 
@@ -217,9 +210,7 @@ $deeply->(
   [ map { sprintf "%.2f", $_ }
       $scala->interval2freq( -13, -12, -11, -1, 0, 1, 12, 13 )
   ],
-  [ map { sprintf "%.2f", $_ } 206.25,
-    220, 233.75, 412.5, 440, 467.5, 880, 935
-  ],
+  [ map { sprintf "%.2f", $_ } 206.25, 220, 233.75, 412.5, 440, 467.5, 880, 935 ],
   'interval2freq for just scale'
 );
 
@@ -236,4 +227,4 @@ $deeply->(
   'non-octave scale intervale2freq calcs'
 );
 
-plan tests => 50;
+plan tests => 48;

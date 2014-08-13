@@ -4,35 +4,118 @@
 # on specification at: http://www.huygens-fokker.org/scala/
 #
 # Ratio to cent and cent to ratio equations lifted from "Musimathics,
-# volume 1", pp. 45-46.
-#
-# TODO test scala file with negative cents, make sure various things
-# behave wrt that.
+# volume 1", pp. 45-46. MIDI conversion probably from wikipedia.
 
 package Music::Scala;
 
 use 5.010000;
-use strict;
-use warnings;
 
 use Carp qw/croak/;
 use File::Basename qw/basename/;
+use Moo;
+use namespace::clean;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '0.85';
+our $VERSION = '1.00';
 
-# To avoid file reader from wasting too much time on bum input (longest
-# scala file 'fortune.scl' in archive as of 2013-02-19 has 617 lines).
-my $MAX_LINES = 3000;
-
-########################################################################
+##############################################################################
 #
-# SUBROUTINES
+# ATTRIBUTES
+#
+# NOTE that much of the Moo setup (getters/setters, how "notes" handled, etc)
+# is to preserve compatibility with how the code worked pre-Moo. Additional
+# hilarity stemmed from (the mistake of?) offering multiple methods to get/set
+# the same data in different guises (notes (as cents or ratios), (notes as)
+# cents, (notes as) ratios).
+
+has binmode => (
+  is => 'rw',
+
+  predicate => 1,
+  reader    => 'get_binmode',
+  writer    => 'set_binmode',
+);
+
+has concertfreq => (
+  is      => 'rw',
+  default => sub { 440 },
+  isa     => sub {
+    die 'frequency must be a positive number (Hz)'
+      if !defined $_[0]
+      or !looks_like_number $_[0]
+      or $_[0] <= 0;
+  },
+  reader => 'get_concertfreq',
+  writer => 'set_concertfreq',
+);
+
+has concertpitch => (
+  is      => 'rw',
+  default => sub { 69 },
+  isa     => sub {
+    die 'pitch must be a positive number'
+      if !defined $_[0]
+      or !looks_like_number $_[0]
+      or $_[0] <= 0;
+  },
+  reader => 'get_concertpitch',
+  writer => 'set_concertpitch',
+);
+
+has description => (
+  is      => 'rw',
+  default => sub { '' },
+  isa     => sub {
+    die 'description must be string value'
+      if !defined $_[0]
+      or defined reftype $_[0];
+  },
+  reader => 'get_description',
+  writer => 'set_description',
+);
+
+# Sanity on scala scale file reads; other prudent limits with untrusted
+# input would be to check the file size, and perhaps to bail if the note
+# count is some absurd value.
+has MAX_LINES => (
+  is      => 'rw',
+  default => sub { 3000 },
+);
+
+has notes => (
+  is        => 'rw',
+  clearer   => 1,
+  predicate => 1,
+);
+
+##############################################################################
+#
+# METHODS
+
+sub BUILD {
+  my ( $self, $param ) = @_;
+
+  if ( exists $param->{file} and exists $param->{fh} ) {
+    die "new accepts only one of the 'file' or 'fh' arguments\n";
+  }
+
+  if ( exists $param->{file} ) {
+    $self->read_scala( file => $param->{file} );
+  } elsif ( exists $param->{fh} ) {
+    $self->read_scala( fh => $param->{fh} );
+  }
+}
 
 sub cents2ratio {
   my ( $self, $cents, $precision ) = @_;
   croak 'cents must be a number' if !looks_like_number $cents;
-  $precision //= 2;
+  if ( defined $precision ) {
+    croak 'precision must be a positive integer'
+      if !looks_like_number $precision or $precision < 0;
+    $precision = int $precision;
+  } else {
+    $precision = 2;
+  }
 
   return sprintf "%.*f", $precision, 10**( $cents / 3986.31371386484 );
 }
@@ -42,91 +125,52 @@ sub freq2pitch {
   my ( $self, $freq ) = @_;
   croak 'frequency must be a positive number'
     if !looks_like_number $freq
-    or $freq < 0;
+    or $freq <= 0;
 
   # no precision, as assume pitch numbers are integers
-  return sprintf "%.0f",
-    $self->{_concertpitch} +
-    12 * ( log( $freq / $self->{_concertfreq} ) / 0.693147180559945 );
-}
-
-sub get_binmode {
-  my ($self) = @_;
-  return $self->{_binmode};
+  return sprintf '%.0f',
+    $self->get_concertpitch +
+    12 * ( log( $freq / $self->get_concertfreq ) / 0.693147180559945 );
 }
 
 sub get_cents {
   my ($self) = @_;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
-  if ( !defined $self->{_ratios} ) {
-    $self->{_cents} = [ $self->notes2cents( $self->{_notes} ) ];
-  }
-  return @{ $self->{_cents} };
+  croak 'no scala loaded' if !$self->has_notes;
+  return $self->notes2cents( @{ $self->notes } );
 }
 
-sub get_concertfreq {
-  my ($self) = @_;
-  return $self->{_concertfreq};
-}
-
-sub get_concertpitch {
-  my ($self) = @_;
-  return $self->{_concertpitch};
-}
-
-sub get_description {
-  my ($self) = @_;
-  return $self->{_description} // '';
-}
-
-# No method for getting the spec file note count value as that's a) not
-# saved in the object and b) can be obtained by calling what this
-# returns as array in scalar context.
 sub get_notes {
   my ($self) = @_;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
-  return @{ $self->{_notes} };
+  croak 'no scala loaded' if !$self->has_notes;
+  return @{ $self->notes };
 }
 
 sub get_ratios {
   my ($self) = @_;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
-  if ( !defined $self->{_ratios} ) {
-    $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
-  }
-  return @{ $self->{_ratios} };
+  croak 'no scala loaded' if !$self->has_notes;
+  return $self->notes2ratios( @{ $self->notes } );
 }
 
-sub get_ref {
-  my ($self) = @_;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
-  return $self->{_notes};
-}
-
-# something that would cache very well, assuming the scala and reference
-# pitch and frequency do not change, and sufficient memory exists
 sub interval2freq {
   my $self = shift;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
+  croak 'no scala loaded' if !$self->has_notes;
 
-  if ( !defined $self->{_ratios} ) {
-    $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
-  }
+  my @ratios = $self->notes2ratios( @{ $self->notes } );
 
   my @freqs;
   for my $i ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
     if ( $i == 0 ) {    # special case for unison (ratio 1/1)
-      push @freqs, $self->{_concertfreq};
+      push @freqs, $self->get_concertfreq;
     } else {
       my $is_dsc = $i < 0 ? 1 : 0;
 
       # for non-"octave" portion, if any
-      my $offset = $i % @{ $self->{_ratios} };
+      my $offset = $i % @ratios;
 
       # "Octave" portion, if any - how many times the interval passes
       # through the complete scale
       my $octave_freq  = 0;
-      my $octave_count = abs int $i / @{ $self->{_ratios} };
+      my $octave_count = abs int $i / @ratios;
 
       # if non-octave on a negative interval, go one octave past the
       # target, then use the regular ascending logic to backtrack to the
@@ -134,16 +178,17 @@ sub interval2freq {
       $octave_count++ if $is_dsc and $offset != 0;
 
       if ( $octave_count > 0 ) {
-        my $octaves_ratio = $self->{_ratios}->[-1]**$octave_count;
+        my $octaves_ratio = $ratios[-1]**$octave_count;
         $octaves_ratio = 1 / $octaves_ratio if $is_dsc;
-        $octave_freq = $self->{_concertfreq} * $octaves_ratio;
+        $octave_freq = $self->get_concertfreq * $octaves_ratio;
       }
 
       my $remainder_freq = 0;
       if ( $offset != 0 ) {
-        $remainder_freq = ( $octave_freq || $self->{_concertfreq} ) *
-          $self->{_ratios}->[ $offset - 1 ];
-        # as remainder is based from $octave_freq, if relevant, so
+        $remainder_freq =
+          ( $octave_freq || $self->get_concertfreq ) * $ratios[ $offset - 1 ];
+
+        # zero as remainder is based from $octave_freq, if relevant, so
         # already includes such
         $octave_freq = 0;
       }
@@ -152,22 +197,20 @@ sub interval2freq {
     }
   }
 
-  return @freqs > 1 ? @freqs : $freqs[0];
+  return @freqs;
 }
 
 sub is_octavish {
   my $self = shift;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
+  croak 'no scala loaded' if !$self->has_notes;
 
-  if ( !defined $self->{_ratios} ) {
-    $self->{_ratios} = [ $self->notes2ratios( $self->{_notes} ) ];
-  }
+  my @ratios = $self->notes2ratios( @{ $self->notes } );
 
-  # not octave bounded
-  return 0 if $self->{_ratios}->[-1] != 2;
+  # not octave bounded (double the frequency, e.g. 440 to 880)
+  return 0 if $ratios[-1] != 2;
 
   my $min;
-  for my $r ( @{ $self->{_ratios} } ) {
+  for my $r (@ratios) {
     # don't know how to handle negative ratios
     return 0 if $r < 0;
 
@@ -182,55 +225,12 @@ sub is_octavish {
   return 1;
 }
 
-sub new {
-  my ( $class, %param ) = @_;
-  my $self = {};
-
-  $self->{_binmode} = $param{binmode} if exists $param{binmode};
-
-  $self->{_concertpitch} = 69;
-  if ( exists $param{concertpitch} ) {
-    croak 'concert pitch must be a positive number'
-      if !defined $param{concertpitch}
-      or !looks_like_number $param{concertpitch}
-      or $param{concertpitch} <= 0;
-    $self->{_concertpitch} = $param{concertpitch};
-  }
-
-  $self->{_concertfreq} = 440;
-  if ( exists $param{concertfreq} ) {
-    croak 'concert frequency must be a positive number (Hz)'
-      if !defined $param{concertfreq}
-      or !looks_like_number $param{concertfreq}
-      or $param{concertfreq} <= 0;
-    $self->{_concertfreq} = $param{concertfreq};
-  }
-
-  $self->{_MAX_LINES} =
-    exists $param{MAX_LINES} ? $param{MAX_LINES} : $MAX_LINES;
-
-  # RESET_DUP_CODE
-  $self->{_cents}  = undef;
-  $self->{_notes}  = [];
-  $self->{_ratios} = undef;
-
-  bless $self, $class;
-
-  if ( exists $param{file} ) {
-    $self->read_scala( file => $param{file} );
-  } elsif ( exists $param{fh} ) {
-    $self->read_scala( fh => $param{fh} );
-  }
-
-  return $self;
-}
-
 sub notes2cents {
   my $self = shift;
 
   my @cents;
   for my $n ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
-    if ( $n =~ m{(\d+)/([1-9][0-9]*)} ) {
+    if ( $n =~ m{([0-9]+)/([1-9][0-9]*)} ) {
       push @cents,
         1200 * ( ( log( $1 / $2 ) / 2.30258509299405 ) / 0.301029995663981 );
     } else {
@@ -238,7 +238,7 @@ sub notes2cents {
     }
   }
 
-  return @cents > 1 ? @cents : $cents[0];
+  return @cents;
 }
 
 sub notes2ratios {
@@ -246,14 +246,14 @@ sub notes2ratios {
 
   my @ratios;
   for my $n ( ref $_[0] eq 'ARRAY' ? @{ $_[0] } : @_ ) {
-    if ( $n =~ m{(\d+)/([1-9][0-9]*)} ) {
+    if ( $n =~ m{([0-9]+)/([1-9][0-9]*)} ) {
       push @ratios, $1 / $2;    # ratio, as marked with /
     } else {
       push @ratios, 10**( $n / 3986.31371386484 );
     }
   }
 
-  return @ratios > 1 ? @ratios : $ratios[0];
+  return @ratios;
 }
 
 # MIDI for comparison, the other way
@@ -263,14 +263,20 @@ sub pitch2freq {
     if !looks_like_number $pitch
     or $pitch < 0;
 
-  return $self->{_concertfreq} *
-    ( 2**( ( $pitch - $self->{_concertpitch} ) / 12 ) );
+  return $self->get_concertfreq *
+    ( 2**( ( $pitch - $self->get_concertpitch ) / 12 ) );
 }
 
 sub ratio2cents {
   my ( $self, $ratio, $precision ) = @_;
   croak 'ratio must be a number' if !looks_like_number $ratio;
-  $precision //= 2;
+  if ( defined $precision ) {
+    croak 'precision must be a positive integer'
+      if !looks_like_number $precision or $precision < 0;
+    $precision = int $precision;
+  } else {
+    $precision = 2;
+  }
 
   return sprintf "%.*f", $precision,
     1200 * ( ( log($ratio) / 2.30258509299405 ) / 0.301029995663981 );
@@ -295,15 +301,15 @@ sub read_scala {
   }
   if ( exists $param{binmode} ) {
     binmode $fh, $param{binmode} or croak 'binmode failed: ' . $!;
-  } elsif ( exists $self->{_binmode} ) {
-    binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
+  } elsif ( $self->has_binmode ) {
+    binmode $fh, $self->get_binmode or croak 'binmode failed: ' . $!;
   }
 
   my ( @scala, $line_count );
   while ( !eof($fh) ) {
     my $line = readline $fh;
     croak 'readline failed: ' . $! unless defined $line;
-    croak 'input exceeds MAX_LINES' if ++$line_count >= $self->{_MAX_LINES};
+    croak 'input exceeds MAX_LINES' if ++$line_count >= $self->MAX_LINES;
     next if $line =~ m/^[!]/;    # skip comments
 
     chomp $line;
@@ -316,7 +322,7 @@ sub read_scala {
     croak 'missing description or note count lines';
   }
 
-  $self->{_description} = shift @scala;
+  $self->set_description( shift @scala );
   my $NOTECOUNT;
   if ( $scala[-1] =~ m/^\s*([0-9]+)/ ) {
     $NOTECOUNT = $1;
@@ -329,7 +335,7 @@ sub read_scala {
   while ( !eof($fh) ) {
     my $line = readline $fh;
     croak 'readline failed: ' . $! unless defined $line;
-    croak 'input exceeds MAX_LINES' if ++$line_count >= $self->{_MAX_LINES};
+    croak 'input exceeds MAX_LINES' if ++$line_count >= $self->MAX_LINES;
     next if $line =~ m/^[!]/;    # skip comments
 
     # All the scales.zip *.scl files as of 2013-02-19 have digits on
@@ -349,54 +355,31 @@ sub read_scala {
       $ratio .= '/1' if $ratio !~ m{/};    # implicit qualify of ratios
       push @notes, $ratio;
     } else {
-      # Nothing in the spec about non-matching lines, so blow up.
-      # However, there are six files in scales.zip that have trailing
-      # blank lines, though these blank lines occur only after an
-      # appropriate number of note entries. So must exit loop before
-      # reading those invalid? lines.
+      # Nothing in the spec about non-matching lines, so blow up. However,
+      # there are six files in scales.zip that have trailing blank lines,
+      # though these blank lines occur only after an appropriate number of note
+      # entries. So must exit loop before reading those invalid? lines. (Did
+      # mail the author about these, so probably has been rectified.)
       croak 'invalid note specification on line ' . $.;
     }
 
     last if $cur_note++ >= $NOTECOUNT;
   }
   if ( @notes != $NOTECOUNT ) {
-    croak 'expected '
-      . $NOTECOUNT
-      . ' notes but got '
-      . scalar(@notes)
-      . " notes";
+    croak 'expected ' . $NOTECOUNT . ' notes but got ' . scalar(@notes) . " notes";
   }
 
   # edge case: remove any 1/1 (zero cents) at head of the list, as this
   # implementation treats that as implicit
-  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+  shift @notes if sprintf( "%.0f", $self->notes2cents( $notes[0] ) ) == 0;
 
-  @{ $self->{_notes} } = @notes;
-  # RESET_DUP_CODE
-  $self->{_cents}  = undef;
-  $self->{_ratios} = undef;
+  $self->notes( \@notes );
 
   return $self;
 }
 
-sub reset {
-  my ( $self, $everything ) = @_;
-  # RESET_DUP_CODE
-  $self->{_cents}  = undef;
-  $self->{_ratios} = undef;
-  @{ $self->{_notes} } = () if $everything;
-  return $self;
-}
-
-sub set_binmode {
-  my ( $self, $binmode ) = @_;
-  $self->{_binmode} = $binmode;
-  return $self;
-}
-
-# Given list of frequencies, assume first is root frequency, then
-# convert the remainder of the frequencies to cents against that first
-# frequency.
+# Given list of frequencies, assume first is root frequency, then convert the
+# remainder of the frequencies to cents against that first frequency.
 sub set_by_frequency {
   my $self = shift;
   my $freqs = ref $_[0] eq 'ARRAY' ? $_[0] : \@_;
@@ -406,48 +389,16 @@ sub set_by_frequency {
   my @notes;
   for my $i ( 1 .. $#{$freqs} ) {
     push @notes,
-      1200 * ( ( log( $freqs->[$i] / $freqs->[0] ) / 2.30258509299405 ) /
-        0.301029995663981 );
+      1200 * (
+      ( log( $freqs->[$i] / $freqs->[0] ) / 2.30258509299405 ) / 0.301029995663981 );
   }
 
   # edge case: remove any 1/1 (zero cents) at head of the list, as this
   # implementation treats that as implicit
-  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+  shift @notes if sprintf( "%.0f", $self->notes2cents( $notes[0] ) ) == 0;
 
-  @{ $self->{_notes} } = @notes;
-  # RESET_DUP_CODE
-  $self->{_cents}  = undef;
-  $self->{_ratios} = undef;
+  $self->notes( \@notes );
 
-  return $self;
-}
-
-sub set_concertfreq {
-  my ( $self, $cf ) = @_;
-  croak 'concert pitch must be a positive number (Hz)'
-    if !defined $cf
-    or !looks_like_number $cf
-    or $cf <= 0;
-  $self->{_concertfreq} = $cf;
-  return $self;
-}
-
-sub set_concertpitch {
-  my ( $self, $cp ) = @_;
-  croak 'concert pitch must be a positive number'
-    if !defined $cp
-    or !looks_like_number $cp
-    or $cp <= 0;
-  $self->{_concertpitch} = $cp;
-  return $self;
-}
-
-sub set_description {
-  my ( $self, $desc ) = @_;
-  croak 'description must be string value'
-    if !defined $desc
-    or defined reftype $desc;
-  $self->{_description} = $desc;
   return $self;
 }
 
@@ -468,18 +419,15 @@ sub set_notes {
 
   # edge case: remove any 1/1 (zero cents) at head of the list, as this
   # implementation treats that as implicit
-  shift @notes if sprintf "%.0f", $self->notes2cents( $notes[0] ) == 0;
+  shift @notes if sprintf( "%.0f", $self->notes2cents( $notes[0] ) ) == 0;
 
-  @{ $self->{_notes} } = @notes;
-  # RESET_DUP_CODE
-  $self->{_cents}  = undef;
-  $self->{_ratios} = undef;
+  $self->notes( \@notes );
   return $self;
 }
 
 sub write_scala {
   my $self = shift;
-  croak 'no scala loaded' unless @{ $self->{_notes} };
+  croak 'no scala loaded' if !$self->has_notes;
 
   my %param;
   if ( @_ == 1 ) {
@@ -498,25 +446,23 @@ sub write_scala {
   }
   if ( exists $param{binmode} ) {
     binmode $fh, $param{binmode} or croak 'binmode failed: ' . $!;
-  } elsif ( exists $self->{_binmode} ) {
-    binmode $fh, $self->{_binmode} or croak 'binmode failed: ' . $!;
+  } elsif ( $self->has_binmode ) {
+    binmode $fh, $self->get_binmode or croak 'binmode failed: ' . $!;
   }
 
   my $filename = basename( $param{file} )
     if exists $param{file};
-  my $note_count = @{ $self->{_notes} } || 0;
+  my $note_count = @{ $self->notes } || 0;
 
   say $fh defined $filename
     ? "! $filename"
     : '!';
   say $fh '!';
-  say $fh ( exists $self->{_description} and defined $self->{_description} )
-    ? $self->{_description}
-    : '';
+  say $fh $self->get_description;
   say $fh ' ', $note_count;
   say $fh '!';    # conventional comment between note count and notes
 
-  for my $note ( @{ $self->{_notes} } ) {
+  for my $note ( @{ $self->notes } ) {
     say $fh ' ', $note;
   }
 
@@ -525,6 +471,10 @@ sub write_scala {
 
 1;
 __END__
+
+##############################################################################
+#
+# DOCS
 
 =head1 NAME
 
@@ -535,35 +485,42 @@ Music::Scala - Scala scale support for Perl
   use Music::Scala ();
   my $scala = Music::Scala->new;
 
+  $scala->set_binmode(':encoding(iso-8859-1):crlf');
   $scala->read_scala('groenewald_bach.scl');
-  $scala->get_description; # "Jurgen Gronewald, si..."
-  $scala->get_notes;       # (256/243, 189.25008, ...)
+
+  $scala->get_description;   # "Jurgen Gronewald, si..."
+  $scala->get_notes;         # (256/243, 189.25008, ...)
   $scala->get_cents;
   $scala->get_ratios;
 
+  # which interval is what frequency given the loaded scala data
+  # and the given concert frequency (A440 if not changed)
   $scala->set_concertfreq(422.5);
   $scala->interval2freq(0, 1); # (422.5, 445.1)
 
   $scala->set_description('Heavenly Chimes');
+  # by ratio; these are strings that get parsed internally
   $scala->set_notes(qw{ 32/29 1/2 16/29 });
   $scala->write_scala('chimes.scl');
 
-  # or cents, note the quoting on .0 value
+  # or by cents -- mark well the quoting on 1200; Perl will map
+  # things like a bare 1200.000 to '1200' which then becomes the
+  # ratio 1200/1 which is wrong.
   $scala->set_notes(250.9, 483.3, 715.6, 951.1, '1200.0');
 
-  # MIDI equal temperament algos for comparison
+  # utility MIDI equal temperament algorithms
   $scala->pitch2freq(69);
   $scala->freq2pitch(440);
 
-And more; see also the C<eg/> and C<t/> directories of the distribution
-of this module for example code.
+See also the C<eg/> and C<t/> directories of the distribution of this module
+for example code.
 
 =head1 DESCRIPTION
 
 Scala scale support for Perl: reading, writing, setting, and interval to
-frequency conversion methods are provided. The L</"SEE ALSO"> section
-links to the developer pages for the specification, along with an
-archive of scala files that define various tunings and temperaments.
+frequency conversion methods are provided. The L</"SEE ALSO"> section links to
+the developer pages for the original specification, along with an archive of
+scala files that define various tunings and temperaments.
 
 =head2 SEVERAL WORDS REGARDING FLOATING POINT NUMBERS
 
@@ -579,49 +536,51 @@ rounded due to floating point number representation limitations:
 
 For more information, see:
 
-L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What
-Every Computer Scientist Should Know About Floating-Point Arithmetic".
-David Goldberg, Computing Surveys, March 1991.
+L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What Every
+Computer Scientist Should Know About Floating-Point Arithmetic". David
+Goldberg, Computing Surveys, March 1991.
 
 =head1 METHODS
 
-Methods will B<die> or B<croak> under various conditions, mostly related
-to bad input. B<new> would be a good one to start with.
+Methods will throw exceptions under various conditions, mostly related to bad
+input or scala scale data not being loaded.
 
 =over 4
 
 =item B<cents2ratio> I<cents>, [ I<precision> ]
 
-Converts a value in cents (e.g. 1200) to a ratio (e.g. 2). An optional
-precision for C<sprintf> can be supplied; the default precision is 2.
+Converts a value in cents (e.g. C<1200>) to a ratio (e.g. C<2>). An optional
+precision for C<sprintf> can be supplied; the default precision is C<2>.
 
 =item B<freq2pitch> I<frequency>
 
-Converts the passed frequency (Hz) to the corresponding MIDI pitch
-number using the MIDI algorithm (equal temperament), as influenced by
-the I<concertfreq> setting. Unrelated to scala, but perhaps handy for
-comparison with results from B<interval2freq>.
+Converts the passed frequency (Hz) to the corresponding MIDI pitch number using
+the MIDI algorithm, as influenced by the B<concertfreq> setting. Unrelated to
+scala, but handy for comparison with results from B<interval2freq>.
 
-This method *is not* influenced by the scala scale data.
+This method *is not* influenced by the scala scale data, and always uses equal
+temperament. See also B<pitch2freq>.
 
 =item B<get_binmode>
 
-Returns the current C<binmode> layer setting, C<undef> by default.
+Returns the current C<binmode> layer setting that influences the encoding used
+by the B<read_scala> and B<write_scala> methods. See B<set_binmode> for details
+on why this is probably necessary for scala scale files.
 
 =item B<get_cents>
 
 Returns, as a list, the "notes" of the scala, except converted to cents
-(notes may either be ratios or values in cents). Throws an exception if
-the notes have not been set by some previous method.
+("notes" may either be ratios or values in cents; this method ensures that they
+are all represented in cents). Throws an exception if the notes have not been
+set by some previous method call (B<read_scala> or B<set_notes>).
 
 =item B<get_concertfreq>
 
-Returns the concert frequency presently set in the object. 440 (Hz) is
-the default.
+Returns the concert frequency. C<440> (Hz) is the default.
 
 =item B<get_concertpitch>
 
-Returns the MIDI pitch number that the I<concertfreq> maps to. 69 by
+Returns the MIDI pitch number that the I<concertfreq> maps to. C<69> by
 default (as that is the MIDI number of A440).
 
 =item B<get_description>
@@ -631,139 +590,92 @@ if no description was read or set prior.
 
 =item B<get_notes>
 
-Returns, as a list, the "notes" of the scala, but throws an exception if
-this field has not been set by some previous method. The notes are
-either real numbers (representing values in cents, or 1/1200 of an
-octave (these may be negative)) or otherwise integer ratios (e.g.
-C<3/2> or C<2>).
+Returns, as a list, the "notes" of the scala, but throws an exception if this
+field has not been set by some previous method. The notes are either real
+numbers (representing values in cents, or 1/1200 of an octave (these may be
+negative)) or otherwise integer ratios (e.g. C<3/2> or C<2> (these may not be
+negative)).
 
   $scala->read_scala(file => $some_file);
   my @notes = $scala->get_notes;
   if (@notes == 12) { ...
 
-The implicit C<1/1> for unison is not contained in the list of notes;
-the first element is for the 2nd degree of the scale (e.g. the minor
-second of a 12-tone scale).
+The implicit C<1/1> for unison is not contained in the list of notes; the
+first element is for the 2nd degree of the scale (e.g. the minor second of a
+12-tone scale). Other implementations may differ in this regard.
 
 =item B<get_ratios>
 
 Returns, as a list, the "notes" of the scala, except converted to ratios
-(notes may either be ratios or values in cents). Throws an exception if
-the notes have not been set by some previous method.
+("notes" may either be ratios or values in cents; this method ensures that
+these values are returned as ratios). Throws an exception if the notes have not
+been set by some previous method call (B<read_scala> or B<set_notes>).
 
 =item B<interval2freq> I<intervals ...>
 
-Converts a list of passed interval numbers (list or single array
-reference) to frequencies (in Hz) that are returned as a list. Interval
-numbers are integers, C<0> for unison, C<1> for the first interval
-(which would be a "minor 2nd" for a 12-note scale, but something
-different for scales of other sizes), and so on up to the "octave" (13%
-of the scala archive consists of non-octave bounded scales). Negative
-intervals take the frequency in the other direction, e.g. C<-1> for what
-in a 12-note system would be a minor 2nd downwards. Intervals past the
-"octave" consist of however many "octaves" are present in the scale,
-plus whatever remainder inside the "octave," if any.
+Converts a list of passed interval numbers (as a list or a single array
+reference) to frequencies (in Hz) that are returned as a list. Interval numbers
+are integers, C<0> for unison (the B<concertfreq>), C<1> for the first interval
+(which would be a "minor 2nd" for a 12-note scale, but something different for
+scales of different composition), and so on up to the "octave." Negative
+intervals take the frequency in the other direction, e.g. C<-1> for what in a
+12-note system would be a minor 2nd downwards. Intervals past the "octave"
+consist of however many "octaves" are present in the scale, plus whatever
+remainder lies inside that "octave," if any. "octave" uses scare quotes due to
+13% of the scala archive consisting of non-octave bounded scales; that is,
+scales that do not repeat themselves when the frequency is doubled (see
+B<is_octavish> for a test for this condition).
 
 Conversions are based on the I<concertfreq> setting, which is 440Hz by
 default. Use B<set_concertfreq> to adjust this, for example to base the
-conversion around the frequency of MIDI pitch 60:
+conversion around the frequency of MIDI pitch C<60>:
 
   $scala->set_concertfreq(261.63);
 
-Some scala files note what this value should be in the comments or
-description, or it may vary based on the specific software or
-instruments involved.
+Some scala files note what this value should be in the comments or description,
+or it may vary based on the specific software or instruments involved.
 
-There is no error checking for nonsense conditions: an interval of a
-15th makes no sense for a xylophone with only 10 keys in total. Audit
-the contents of the scala scale file to learn what its limits are, or
-screen for appropriate scales (the B<is_octavish> check may help),
+There is no error checking for nonsense conditions: an interval of a 15th makes
+no sense for a xylophone with only 10 keys in total. Audit the contents of the
+scala scale file to learn what its limits are or screen for appropriate scales
 depending on the application.
 
 =item B<is_octavish>
 
-Returns true if the scala scale has an ultimate ratio of 2:1, as well as
-no negative or repeated ratios; false otherwise. Throws an exception if
-no scala scale is loaded.
-
-=item B<new> I<optional_params>, ...
-
-Constructor. Returns object. Accepts various optional parameters.
-
-=over 4
-
-=item *
-
-I<binmode> - sets a default C<binmode> layer that will be used when
-reading scala files (unless that B<read_scala> call has a different
-I<binmode> passed to it). Given that the scala file specification
-demands "ISO 8859-1 'Latin-1' or the ASCII subset", and uses Internet
-linefeeds, a reasonable default would be:
-
-  Music::Scala->new( binmode => ':encoding(iso-8859-1):crlf' );
-
-Output encoding may also need to be set, if in particular the
-I<description> field of the scala definition will be printed or saved
-elsewhere. See L<perluniintro> for details. Note that both B<read_scala>
-and B<write_scala> will use this same global I<binmode> value if no
-I<binmode> is passed to those methods.
-
-Note that Perl on Windows systems tends to turn on C<:crlf>. For scala
-scale files, it probably should be specified, regardless of the
-operating system.
-
-=item *
-
-I<concertfreq> - sets the reference value (in Hertz) for conversions
-using the B<interval2freq> method. By default this is 440Hz.
-
-=item *
-
-I<file> - filename, if specified, that will be passed to B<read_scala>.
-
-=item *
-
-I<fh> - file handle, if specified, that will be passed to B<read_scala>,
-but only if I<file> is not specified.
-
-=item *
-
-I<MAX_LINES> - sets the maximum number of lines to read while parsing
-data. Sanity check high water mark in the event bad input is passed.
-
-=back
+Returns true if the scala scale has an ultimate ratio of 2:1, as well as no
+negative or repeated ratios; false otherwise. Throws an exception if no scala
+scale is loaded.
 
 =item B<notes2cents> I<notes ...>
 
-Given a list of notes, returns a list of corresponding cents. Used
-internally by the B<get_cents> method.
+Given a list of notes, returns a list of corresponding cents. Used internally
+by the B<get_cents> method.
 
 =item B<notes2ratios> I<notes ...>
 
-Given a list of notes, returns a list of corresponding ratios. Used
-internally by the B<get_ratios> and B<interval2freq> methods.
+Given a list of notes, returns a list of corresponding ratios. Used internally
+by the B<get_ratios> and B<interval2freq> methods.
 
 =item B<pitch2freq> I<MIDI_pitch_number>
 
-Converts the given MIDI pitch number to a frequency using the MIDI
-conversion algorithm (equal temperament), as influenced by the
-I<concertfreq> setting.
+Converts the given MIDI pitch number to a frequency using the MIDI conversion
+algorithm, as influenced by the I<concertfreq> setting.
 
-This method *is not* influenced by the scala scale data.
+This method *is not* influenced by the scala scale data, and always uses equal
+temperament. See also B<freq2pitch>.
 
 =item B<ratio2cents> I<ratio>, [ I<precision> ]
 
-Converts a ratio (e.g. 2) to a value in cents (e.g. 1200). An optional
-precision for C<sprintf> can be supplied; the default precision is 2.
+Converts a ratio (e.g. C<2>) to a value in cents (e.g. C<1200>). An optional
+precision for C<sprintf> can be supplied; the default precision is C<2>.
 
 =item B<read_scala> I<filename>
 
-Parses a scala file. Will throw some kind of exception if anything at
-all is wrong with the input. Use the C<get_*> methods to obtain the
-scala data thus parsed. Comments in the input file are ignored, so
-anything subsequently written using B<write_scala> will lack those. All
-ratios are made implicit by this method; that is, a C<2> would be
-qualified as C<2/1>.
+Parses a scala file. Will throw some kind of exception if anything at all is
+wrong with the input. Use the appropriate C<get_*> methods to obtain the scala
+data thus parsed. Comments in the input file are ignored, so anything
+subsequently written using B<write_scala> will lack those. All ratios are made
+implicit by this method; that is, a C<2> would be qualified as C<2/1>.
 
 As an alternative, accepts also I<file> or I<fh> hash keys, along with
 I<binmode> as in the B<new> method:
@@ -772,15 +684,24 @@ I<binmode> as in the B<new> method:
   $scala->read_scala( file => 'file.scl', binmode => ':crlf' );
   $scala->read_scala( fh   => $input_fh );
 
-Returns the Music::Scala object, so can be chained with other calls.
+The I<file> or I<fh> keys can also be specified to the object constructor, to
+spare a subsequent call to B<read_scala>:
+
+  $scala = Music::Scala->new( fh => $input_fh );
 
 =item B<set_binmode> I<binmode_layer>
 
-Sets the default C<binmode> layer used in B<read_scala> and
-B<write_scala> methods (unless a custom I<binmode> argument is passed to
-those calls).
+Sets the default C<binmode> layer used in B<read_scala> and B<write_scala>
+methods (unless a custom I<binmode> argument is passed to those calls). The
+scala scale files from C<www.huygens-fokker.org> tend to be in the ISO 8859-1
+encoding, mostly for the description and other such metadata fields. Note that
+Perl on Windows systems tends to turn on C<:crlf>. For scala scale files, it
+probably should be specified, regardless of the operating system. Therefore, a
+reasonable default to set might be:
 
-Returns the Music::Scala object, so can be chained with other calls.
+  $scala->set_binmode(':encoding(iso-8859-1):crlf');
+
+Though this module does nothing by default for encoding.
 
 =item B<set_by_frequency> I<root_frequency>, I<frequencies...>
 
@@ -789,91 +710,85 @@ B<set_notes> except creating the intervals on the fly based on the
 I<root_frequency> supplied. Handy if you have a list of frequencies from
 somewhere, and need that converted to cents or ratios.
 
-Returns the Music::Scala object, so can be chained with other calls.
-
 =item B<set_concertfreq> I<frequency>
 
-Sets the concert frequency to the specified value (in Hz). Will throw an
-exception if the input does not look like a positive number.
+Sets the concert frequency to the specified value (in Hz); the default is A440.
+Will throw an exception if the input does not look like a positive number. This
+setting influences both the MIDI pitch conversion routines and various scala
+scale conversions.
 
 =item B<set_concertpitch> I<pitch_number>
 
-Sets the MIDI pitch number tied to the I<concertfreq>. Changing this
-will affect the B<freq2pitch> and B<pitch2freq> methods.
+Sets the MIDI pitch number tied to the I<concertfreq>. Changing this will
+affect the B<freq2pitch> and B<pitch2freq> methods.
 
 =item B<set_description> I<description>
 
 Sets the description. Should be a string.
 
-Returns the Music::Scala object, so can be chained with other calls.
-
 =item B<set_notes> I<array_or_array_ref>
 
-Sets the notes. Can be either an array, or an array reference, ideally
-containing values in ratios or cents as per the Scala scale file
-specification, and the method will throw an exception if these ideals
-are not met.
+Sets the notes. Can either be an array, or an array reference, ideally
+containing values in ratios or cents as per the Scala scale file specification,
+as an exception will be thrown if these ideals are not met.
 
-Returns the Music::Scala object, so can be chained with other calls.
-
-NOTE cents with no value past the decimal must be quoted in code, as
-otherwise Perl converts the value to C<1200> which the code then turns
-into the integer ratio C<1200/1> instead of what should be C<2/1>.
-B<read_scala> does not suffer this problem, as it is looking for the
-literal dot (that nothing is removing automatically) and that is a
-different code path than what happens for ratios.
+NOTE cents with no value past the decimal must be quoted in code, as otherwise
+Perl converts the value to C<1200> which the code then turns into the integer
+ratio C<1200/1> instead of what should be C<2/1>. B<read_scala> does not suffer
+this problem, as it is looking for the literal dot, and that is a different
+code path than what happens for ratios.
 
   $scala->set_notes(250.9, 483.3, 715.6, 951.1, '1200.0');
 
 =item B<write_scala> I<filename>
 
-Writes a scala file. Will throw some kind of exception if anything at
-all is wrong, such as not having scala data loaded in the object. Like
-B<read_scala> alternatively accepts I<file> or I<fh> hash keys, along
-with a I<binmode> option to set the output encoding.
+Writes a scala file. Will throw some kind of exception if anything at all is
+wrong, such as not having scala data loaded in the object. Like B<read_scala>
+alternatively accepts I<file> or I<fh> hash keys, along with a I<binmode>
+option to set the output encoding.
 
   $scala->write_scala('out.scl');
   $scala->write_scala( file => 'out.scl', binmode => ':crlf' );
   $scala->write_scala( fh => $output_fh );
 
-Data will likely not be written until the I<fh> passed is closed. If
-this seems surprising, see L<http://perl.plover.com/FAQs/Buffering.html>
-to learn why it is not.
-
-Returns the Music::Scala object, so can be chained with other calls.
+Data will likely not be written until the I<fh> passed is closed. If this
+seems surprising, see L<http://perl.plover.com/FAQs/Buffering.html> to learn
+why it is not.
 
 =back
 
 =head1 EXAMPLES
 
-Check the C<eg/> and C<t/> directories of the distribution of this
-module for example code.
+Check the C<eg/> and C<t/> directories of the distribution of this module for
+example code.
 
 =head1 BUGS
 
 =head2 Reporting Bugs
 
-If the bug is in the latest version, send a report to the author.
-Patches that fix problems or add new features are welcome.
+If the bug is in the latest version, send a report to the author. Patches that
+fix problems or add new features are welcome.
 
 L<http://github.com/thrig/Music-Scala>
 
 =head2 Known Issues
 
-Negative cents are likely not handled well, or at all. The
-specification frowns on negative ratios, but does allow for negative
-cents, so converting such negative cents to ratios might yield
-unexpected or wrong results.
+Negative cents are likely not handled well, or at all. The specification frowns
+on negative ratios, but does allow for negative cents, so converting such
+negative cents to ratios (which do not support negative values) might yield
+unexpected or wrong results. Only 0.36% of the scala scale archive file scales
+contain negative cents.
 
 =head1 SEE ALSO
 
-L<http://www.huygens-fokker.org/scala/> by Manuel Op de Coul, and the
-scala archive L<http://www.huygens-fokker.org/docs/scales.zip>.
+L<http://www.huygens-fokker.org/scala/> by Manuel Op de Coul, and in particular
+the scala archive L<http://www.huygens-fokker.org/docs/scales.zip> which
+contains many different scales to play around with.
 
-Scales, tunings, and temperament would be good music theory topics to
-read up on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy
-(among many other more in-depth treatments stemming from the more than
-one centuries of development behind these topics).
+Scales, tunings, and temperament would be good music theory topics to read up
+on, e.g. chapters in "Musicmathics, volume 1" by Gareth Loy, among other
+in-depth treatments stemming from the no few centuries of development behind
+music theory.
 
 =head1 AUTHOR
 
@@ -881,10 +796,10 @@ Jeremy Mates, E<lt>jmates@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2013 by Jeremy Mates
+Copyright (C) 2013,2014 by Jeremy Mates
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.16 or, at
-your option, any later version of Perl 5 you may have available.
+This library is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself, either Perl version 5.16 or, at your option, any
+later version of Perl 5 you may have available.
 
 =cut
