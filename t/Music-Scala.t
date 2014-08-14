@@ -127,7 +127,7 @@ $deeply->(
 );
 
 # file => via new() to save on then typing read_scala out
-$scala = Music::Scala->new( file => 'valid-pitch-lines.scl', cat => 42 );
+$scala = Music::Scala->new( file => 'valid-pitch-lines.scl' );
 is( $scala->get_description, 'this is a test', 'get description' );
 
 is( $scala->get_binmode, undef, 'default binmode' );
@@ -227,4 +227,9 @@ $deeply->(
   'non-octave scale intervale2freq calcs'
 );
 
-plan tests => 48;
+# paranoia that attribute with reader/writer might use some other name;
+# they do not when passed to ->new()
+$scala = Music::Scala->new( concertfreq => 123.4 );
+is( $scala->get_concertfreq, 123.4, 'custom concert frequency via new' );
+
+plan tests => 49;

@@ -16,7 +16,7 @@ use Moo;
 use namespace::clean;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 ##############################################################################
 #
@@ -540,6 +540,72 @@ L<http://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html> "What Every
 Computer Scientist Should Know About Floating-Point Arithmetic". David
 Goldberg, Computing Surveys, March 1991.
 
+=head1 CONSTRUCTOR
+
+The B<new> method accepts any of the L</"ATTRIBUTES"> as well as optionally one
+of the B<file> => I<filename> or B<fh> => I<filehandle> arguments to read a
+scala scale file from.
+
+  $scala = Music::Scala->new(
+    binmode => ':encoding(iso-8859-1):crlf',
+    file    => 'foo.scl',
+  );
+
+=head1 ATTRIBUTES
+
+Moo attributes via C<has> statements. These may throw exceptions if bad data is
+passed (negative frequencies or the like). The sporadic use of B<get_*> and
+B<set_*> accessors is due to compatibility with older versions of this module.
+These may also be specified to B<new>:
+
+  # equivalent ways to do the same thing
+  $scala = Music::Scala->new( concertfreq => 443 );
+  $scala->set_concertfreq(443);
+
+=over 4
+
+=item B<binmode> (B<get_binmode>, B<set_binmode>(I<binmode_layer>))
+
+Gets or sets the default C<binmode> layer used in the B<read_scala> and
+B<write_scala> methods (unless a custom I<binmode> argument is passed to those
+calls). The scala scale files from C<www.huygens-fokker.org> tend to be in the
+ISO 8859-1 encoding, mostly for the description and other such metadata fields.
+Note that Perl on Windows systems tends to turn on C<:crlf>. For scala scale
+files, it probably should be specified, regardless of the operating system.
+Therefore, a reasonable default to set might be:
+
+  $scala->set_binmode(':encoding(iso-8859-1):crlf');
+
+Though this module does nothing by default for encoding.
+
+=item B<concertfreq> (B<get_concertfreq>, B<set_concertfreq>(I<frequency>))
+
+Gets or sets the concert frequency. C<440> (Hz) is the default.
+
+=item B<concertpitch> (B<get_concertpitch>, B<set_concertpitch>(I<pitch>))
+
+Gets or sets the MIDI pitch number that the I<concertfreq> maps to. C<69> by
+default (as that is the MIDI number of A440).
+
+=item B<description> (B<get_description>, B<set_description>("blah blah"))
+
+Gets or sets the description of the scala data. This will be the empty string
+if no description was read or set prior.
+
+=item B<MAX_LINES>
+
+Gets or sets the maximum lines to allow in an input scala scale file, C<3000>
+by default.
+
+=item B<notes>
+
+Gets or sets the notes from the scala scale data loaded, if any. Mostly for
+internal use; the B<get_cents>, B<get_notes>, or B<get_ratios> methods are
+likely better means to access this information, and the B<read_scala>,
+B<set_by_frequency>, or B<set_notes> methods better ways to set it.
+
+=back
+
 =head1 METHODS
 
 Methods will throw exceptions under various conditions, mostly related to bad
@@ -550,51 +616,33 @@ input or scala scale data not being loaded.
 =item B<cents2ratio> I<cents>, [ I<precision> ]
 
 Converts a value in cents (e.g. C<1200>) to a ratio (e.g. C<2>). An optional
-precision for C<sprintf> can be supplied; the default precision is C<2>.
+precision for C<sprintf> can be supplied; the default precision is C<2>. There
+are C<1200> cents in an octave (a doubling of the frequency).
 
 =item B<freq2pitch> I<frequency>
 
 Converts the passed frequency (Hz) to the corresponding MIDI pitch number using
-the MIDI algorithm, as influenced by the B<concertfreq> setting. Unrelated to
+the MIDI algorithm, as influenced by the B<concertfreq> attribute. Unrelated to
 scala, but handy for comparison with results from B<interval2freq>.
 
 This method *is not* influenced by the scala scale data, and always uses equal
 temperament. See also B<pitch2freq>.
 
-=item B<get_binmode>
-
-Returns the current C<binmode> layer setting that influences the encoding used
-by the B<read_scala> and B<write_scala> methods. See B<set_binmode> for details
-on why this is probably necessary for scala scale files.
-
 =item B<get_cents>
 
-Returns, as a list, the "notes" of the scala, except converted to cents
-("notes" may either be ratios or values in cents; this method ensures that they
-are all represented in cents). Throws an exception if the notes have not been
-set by some previous method call (B<read_scala> or B<set_notes>).
-
-=item B<get_concertfreq>
-
-Returns the concert frequency. C<440> (Hz) is the default.
-
-=item B<get_concertpitch>
-
-Returns the MIDI pitch number that the I<concertfreq> maps to. C<69> by
-default (as that is the MIDI number of A440).
-
-=item B<get_description>
-
-Returns the description of the scala data. This will be the empty string
-if no description was read or set prior.
+Returns, as a list, the "notes" of the scala scale data, except converted to
+cents ("notes" may either be ratios or values in cents; this method ensures
+that they are all represented in cents). Throws an exception if the notes have
+not been set by some previous method call (one of the B<read_scala>,
+B<set_by_frequency>, or B<set_notes> methods).
 
 =item B<get_notes>
 
 Returns, as a list, the "notes" of the scala, but throws an exception if this
 field has not been set by some previous method. The notes are either real
 numbers (representing values in cents, or 1/1200 of an octave (these may be
-negative)) or otherwise integer ratios (e.g. C<3/2> or C<2> (these may not be
-negative)).
+rarely be negative)) or otherwise integer ratios (e.g. C<3/2> or C<2> (these
+may not be negative)).
 
   $scala->read_scala(file => $some_file);
   my @notes = $scala->get_notes;
@@ -609,7 +657,7 @@ first element is for the 2nd degree of the scale (e.g. the minor second of a
 Returns, as a list, the "notes" of the scala, except converted to ratios
 ("notes" may either be ratios or values in cents; this method ensures that
 these values are returned as ratios). Throws an exception if the notes have not
-been set by some previous method call (B<read_scala> or B<set_notes>).
+been set by some previous method call.
 
 =item B<interval2freq> I<intervals ...>
 
@@ -624,7 +672,7 @@ consist of however many "octaves" are present in the scale, plus whatever
 remainder lies inside that "octave," if any. "octave" uses scare quotes due to
 13% of the scala archive consisting of non-octave bounded scales; that is,
 scales that do not repeat themselves when the frequency is doubled (see
-B<is_octavish> for a test for this condition).
+the B<is_octavish> method for a test for that condition).
 
 Conversions are based on the I<concertfreq> setting, which is 440Hz by
 default. Use B<set_concertfreq> to adjust this, for example to base the
@@ -684,47 +732,12 @@ I<binmode> as in the B<new> method:
   $scala->read_scala( file => 'file.scl', binmode => ':crlf' );
   $scala->read_scala( fh   => $input_fh );
 
-The I<file> or I<fh> keys can also be specified to the object constructor, to
-spare a subsequent call to B<read_scala>:
-
-  $scala = Music::Scala->new( fh => $input_fh );
-
-=item B<set_binmode> I<binmode_layer>
-
-Sets the default C<binmode> layer used in B<read_scala> and B<write_scala>
-methods (unless a custom I<binmode> argument is passed to those calls). The
-scala scale files from C<www.huygens-fokker.org> tend to be in the ISO 8859-1
-encoding, mostly for the description and other such metadata fields. Note that
-Perl on Windows systems tends to turn on C<:crlf>. For scala scale files, it
-probably should be specified, regardless of the operating system. Therefore, a
-reasonable default to set might be:
-
-  $scala->set_binmode(':encoding(iso-8859-1):crlf');
-
-Though this module does nothing by default for encoding.
-
 =item B<set_by_frequency> I<root_frequency>, I<frequencies...>
 
 Given a root frequency as the first argument, performs the equivalent of
-B<set_notes> except creating the intervals on the fly based on the
-I<root_frequency> supplied. Handy if you have a list of frequencies from
-somewhere, and need that converted to cents or ratios.
-
-=item B<set_concertfreq> I<frequency>
-
-Sets the concert frequency to the specified value (in Hz); the default is A440.
-Will throw an exception if the input does not look like a positive number. This
-setting influences both the MIDI pitch conversion routines and various scala
-scale conversions.
-
-=item B<set_concertpitch> I<pitch_number>
-
-Sets the MIDI pitch number tied to the I<concertfreq>. Changing this will
-affect the B<freq2pitch> and B<pitch2freq> methods.
-
-=item B<set_description> I<description>
-
-Sets the description. Should be a string.
+B<set_notes> except that it creates the intervals on the fly based on the
+I<root_frequency> supplied. Handy if you have a list of frequencies, and need
+those converted to cents or ratios.
 
 =item B<set_notes> I<array_or_array_ref>
 
