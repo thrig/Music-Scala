@@ -16,7 +16,7 @@ use Moo;
 use namespace::clean;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 ##############################################################################
 #
@@ -674,14 +674,18 @@ remainder lies inside that "octave," if any. "octave" uses scare quotes due to
 scales that do not repeat themselves when the frequency is doubled (see
 the B<is_octavish> method for a test for that condition).
 
-Conversions are based on the I<concertfreq> setting, which is 440Hz by
-default. Use B<set_concertfreq> to adjust this, for example to base the
-conversion around the frequency of MIDI pitch C<60>:
+Conversions are based on the I<concertfreq> setting, which is 440Hz by default.
+Use B<set_concertfreq> method to adjust this. An example that derives the
+frequencies of C4 through B4 using the equal temperament tuning file from the
+scala scale file archive:
 
+  $scala->read_scala('equal.scl');
   $scala->set_concertfreq(261.63);
+  my @freqs = map { sprintf '%.2f', $_ } 
+    $scala->interval2freq(qw/0 1 2 3 4 5 6 7 8 9 10 11/);
 
 Some scala files note what this value should be in the comments or description,
-or it may vary based on the specific software or instruments involved.
+or it may vary based on the needs of the software or instruments involved.
 
 There is no error checking for nonsense conditions: an interval of a 15th makes
 no sense for a xylophone with only 10 keys in total. Audit the contents of the
