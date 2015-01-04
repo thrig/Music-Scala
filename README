@@ -4,15 +4,18 @@ To install this module, use CPAN, for example:
 
   cpan Music::Scala
 
-For the current release, see:
+For the source code, see:
 
 http://github.com/thrig/Music-Scala
 
-which can be installed once git and cpanm are installed by e.g.
+This can be built and installed by running:
 
-  git clone https://github.com/thrig/Music-Scala
-  cd Music-Scala
-  cpanm .
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+Run perldoc(1) on Music::Scala for more documentation.
 
 DEPENDENCIES
 
