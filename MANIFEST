@@ -3,6 +3,7 @@ LICENSE
 MANIFEST
 Makefile.PL
 README
+SIGNATURE
 carlos_super.scl
 eg/README
 eg/fitness
