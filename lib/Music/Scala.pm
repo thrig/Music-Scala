@@ -16,7 +16,7 @@ use Moo;
 use namespace::clean;
 use Scalar::Util qw/looks_like_number reftype/;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 ##############################################################################
 #

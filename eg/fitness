@@ -65,10 +65,7 @@ FILE: for my $file ( grep { $_ ne $reference_scala } glob('*.scl') ) {
     $prev_c = $c;
   }
 
-  # do not care about perfect fits (presumably subsets of the
-  # reference scale)
   my $sum = sum @fits;
-  next FILE if $sum == 0;
 
   # Mean delta (might also look at deeper stats, see which has the worst
   # outliers, histogram things up, etc.)
