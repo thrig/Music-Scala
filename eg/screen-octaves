@@ -10,9 +10,9 @@ use Music::Scala ();
 my $s = Music::Scala->new;
 
 for my $file ( glob('*.scl') ) {
-  eval {
-    my @ratios = $s->read_scala($file)->get_ratios;
-    if ( $ratios[-1] == 2 and @ratios == 12 ) { say $file }
-  };
-  warn "could not parse '$file': $@\n" if $@;
+    eval {
+        my @ratios = $s->read_scala($file)->get_ratios;
+        if ( $ratios[-1] == 2 and @ratios == 12 ) { say $file }
+    };
+    warn "could not parse '$file': $@\n" if $@;
 }
