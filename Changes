@@ -1,5 +1,8 @@
 See the git repository. In particular:
 
+1.06    Also March 2020
+    * re-add necessary dependencies to Build.PL
+
 1.05    March 2020
     * add pod-coverage tests and fiddle with the docs as a result
     * require File::Cmp and better log the file contents when the fcmp

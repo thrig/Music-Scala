@@ -18,13 +18,18 @@ Module::Build->new(
         'Module::Build' => '0.4004',     # test_requires
     },
     requires => {
-        'perl'   => '5.10.0',
-        'strict' => 0,
+        'perl'             => '5.10.0',
+        'strict'           => 0,
+        'Carp'             => 0,
+        'File::Basename'   => 0,
+        'Moo'              => 0,
+        'namespace::clean' => 0,
+        'Scalar::Util'     => 0,
     },
     test_requires => {
         'strict'     => 0,
         'File::Cmp'  => '1.07',
-        'Test::More' => '0.88',          # done_testing
+        'Test::More' => '0.88',    # done_testing
         'Test::Most' => 0,
     },
     add_to_cleanup => [ 'Music-Scala-*', 't/*.scl' ],
